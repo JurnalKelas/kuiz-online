@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGenerator Pro - Pembuat Soal & Rekap Nilai Otomatis</title>
+    <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LZ-String untuk kompatibilitas link kompresi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         .a4-paper {
             width: 210mm;
@@ -81,7 +83,7 @@
             };
             initAuth();
         } catch (e) {
-            console.log("Firebase initialized in offline mode or standalone.");
+            console.log("Firebase initialized in offline mode.");
         }
 
         const QUESTION_TYPES = [
@@ -259,19 +261,39 @@
 
             const params = new URLSearchParams(window.location.search);
             const rawQ = params.get('q');
-            const qData = rawQ ? rawQ.replace(/ /g, '+') : null;
+            const rawZ = params.get('z');
             
             let decodedObj = null;
 
-            if (qData) {
+            if (rawQ) {
                 try {
+                    const qData = rawQ.replace(/ /g, '+');
                     decodedObj = JSON.parse(decodeURIComponent(atob(qData)));
-                    state.studentQuiz = decodedObj;
-                    state.timeRemaining = (decodedObj.time || 15) * 60;
-                    state.mode = 'student_start';
                 } catch (e) {
-                    console.error("Gagal dekode kuis", e);
+                    console.error("Gagal dekode q:", e);
                 }
+            } else if (rawZ) {
+                try {
+                    const decompressed = LZString.decompressFromEncodedURIComponent(rawZ);
+                    if (decompressed) {
+                        const raw = JSON.parse(decompressed);
+                        decodedObj = {
+                            type: raw.t,
+                            subject: raw.s,
+                            topic: raw.tp,
+                            text: raw.tx,
+                            time: raw.tm
+                        };
+                    }
+                } catch (e) {
+                    console.error("Gagal dekode z:", e);
+                }
+            }
+
+            if (decodedObj) {
+                state.studentQuiz = decodedObj;
+                state.timeRemaining = (decodedObj.time || 15) * 60;
+                state.mode = 'student_start';
             }
 
             if (db) {
@@ -288,7 +310,7 @@
                         console.log("Snapshot notice:", err);
                     });
                 } catch (e) {
-                    console.log("Firestore not available in this mode.");
+                    console.log("Firestore not available.");
                 }
             }
             
