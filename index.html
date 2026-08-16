@@ -6,7 +6,10 @@
     <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .a4-paper { width: 210mm; min-height: 297mm; }
+        .a4-paper {
+            width: 210mm;
+            min-height: 297mm;
+        }
         @media print {
             @page { size: A4 portrait; margin: 10mm; }
             html, body, #app, main, section {
@@ -111,9 +114,9 @@
             let lines = [];
             for (let i = 1; i <= 25; i++) {
                 if (type === 'mc') {
-                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${topic} dalam mata pelajaran ${subject}? | Pilihan A yang tepat | Pilihan B alternatif | Pilihan C pengecoh | Pilihan D pengecoh | A`);
+                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${topic} dalam mata pelajaran ${subject}? | Pilihan jawaban A yang paling tepat | Pilihan jawaban B alternatif | Pilihan jawaban C pengecoh | Pilihan jawaban D pengecoh | A`);
                 } else if (type === 'matching') {
-                    lines.push(`Istilah kunci ${i} (${topic}) - Pasangan definisi yang sesuai untuk nomor ${i}`);
+                    lines.push(`Istilah kunci ${i} (${topic}) - Pasangan definisi yang sesuai dengan nomor ${i}`);
                 } else if (type === 'tf') {
                     lines.push(`Pernyataan ${i} terkait materi ${topic} bernilai benar atau salah.`);
                 } else {
@@ -130,21 +133,16 @@
 
         function init() {
             const params = new URLSearchParams(window.location.search);
-            const targetQ = params.get('q');
+            const rawQ = params.get('q');
+            const rawZ = params.get('z');
+            const targetQ = rawQ || rawZ;
             
             let decodedObj = null;
             if (targetQ) {
                 try {
-                    // DEKODE AMAN: Memperbaiki spasi yang berubah kembali menjadi + dan mengembalikan padding Base64
-                    let base64 = targetQ.replace(/-/g, '+').replace(/_/g, '/').replace(/ /g, '+');
-                    while (base64.length % 4) { base64 += '='; }
-                    const jsonStr = decodeURIComponent(atob(base64));
-                    decodedObj = JSON.parse(jsonStr);
+                    decodedObj = JSON.parse(decodeURIComponent(atob(targetQ.replace(/ /g, '+'))));
                 } catch (e) {
                     console.error("Gagal dekode:", e);
-                    alert("⚠️ Maaf, link kuis ini tidak valid atau formatnya rusak. Anda akan dikembalikan ke halaman utama.");
-                    window.location.href = window.location.origin + window.location.pathname;
-                    return;
                 }
             }
 
@@ -180,13 +178,8 @@
                 wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
-            // ENKODE AMAN: Mengubah base64 biasa ke format khusus URL (tanpa + / dan =)
-            const jsonStr = JSON.stringify(quizPayload);
-            const base64 = btoa(encodeURIComponent(jsonStr));
-            const safeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            
-            let baseUrl = window.location.origin + window.location.pathname;
-            state.rawShareUrl = `${baseUrl}?q=${safeBase64}`;
+            const encodedStr = btoa(encodeURIComponent(JSON.stringify(quizPayload)));
+            state.rawShareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`;
             state.showModal = true;
             render();
         };
@@ -402,9 +395,8 @@
                             <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
                                 <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button>
                                 <h2 class="text-xl font-bold mb-1">Link Kuis Siswa</h2>
-                                <p class="text-xs text-slate-500 mb-4">Link aman, anti-potong, dan bebas dari library eksternal.</p>
                                 <input type="text" readonly value="${state.rawShareUrl}" class="w-full bg-slate-100 border rounded-xl p-3 text-xs text-blue-600 font-mono mb-4">
-                                <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">Salin Link Kuis</button>
+                                <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">Salin Link</button>
                                 <div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 mt-2"></div>
                             </div>
                         </div>
@@ -413,8 +405,8 @@
                     <header class="bg-white shadow-sm border-b px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
                         <div class="font-black text-xl text-blue-600">✏️ EduGenerator Pro</div>
                         <div class="flex gap-3">
-                            <button onclick="window.generateLink()" class="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm">Bagikan Online</button>
-                            <button onclick="window.triggerPrint()" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm">Cetak Kertas</button>
+                            <button onclick="window.generateLink()" class="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium">Bagikan Online</button>
+                            <button onclick="window.triggerPrint()" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium">Cetak Kertas</button>
                         </div>
                     </header>
 
