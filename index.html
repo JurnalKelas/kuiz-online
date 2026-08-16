@@ -103,57 +103,73 @@
 
         window.appState = state;
 
-        function generateSmartQuestions() {
-            const subject = state.subject || 'Pelajaran';
-            const topic = state.topic || 'Materi';
-            const type = state.type;
-
+        // Fungsi khusus untuk meracik teks secara identik di HP Guru dan HP Siswa
+        function getSmartQuestionsText(type, subject, topic) {
+            const subj = subject || 'Mata Pelajaran';
+            const top = topic || 'Materi';
             let lines = [];
             for (let i = 1; i <= 25; i++) {
                 if (type === 'mc') {
-                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${topic} dalam mata pelajaran ${subject}? | Pilihan A yang tepat | Pilihan B alternatif | Pilihan C pengecoh | Pilihan D pengecoh | A`);
+                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${top} dalam mata pelajaran ${subj}? | Pilihan A yang tepat | Pilihan B alternatif | Pilihan C pengecoh | Pilihan D pengecoh | A`);
                 } else if (type === 'matching') {
-                    lines.push(`Istilah kunci ${i} (${topic}) - Pasangan definisi yang sesuai untuk nomor ${i}`);
+                    lines.push(`Istilah kunci ${i} (${top}) - Pasangan definisi yang sesuai untuk nomor ${i}`);
                 } else if (type === 'tf') {
-                    lines.push(`Pernyataan ${i} terkait materi ${topic} bernilai benar atau salah.`);
+                    lines.push(`Pernyataan ${i} terkait materi ${top} bernilai benar atau salah.`);
                 } else {
-                    lines.push(`Jelaskan secara ringkas mengenai konsep nomor ${i} pada materi ${topic}?`);
+                    lines.push(`Jelaskan secara ringkas mengenai konsep nomor ${i} pada materi ${top}?`);
                 }
             }
-            state.text = lines.join('\n');
+            return lines.join('\n');
         }
 
         window.generate25Auto = function() {
-            generateSmartQuestions();
+            state.text = getSmartQuestionsText(state.type, state.subject, state.topic);
             render();
         };
 
-        function init() {
+        async function init() {
             const params = new URLSearchParams(window.location.search);
             const targetQ = params.get('q');
             
-            let decodedObj = null;
             if (targetQ) {
                 try {
-                    // DEKODE AMAN: Memperbaiki spasi yang berubah kembali menjadi + dan mengembalikan padding Base64
-                    let base64 = targetQ.replace(/-/g, '+').replace(/_/g, '/').replace(/ /g, '+');
-                    while (base64.length % 4) { base64 += '='; }
-                    const jsonStr = decodeURIComponent(atob(base64));
-                    decodedObj = JSON.parse(jsonStr);
+                    const prefix = targetQ.charAt(0);
+                    let base64 = targetQ.substring(1).replace(/-/g, '+').replace(/_/g, '/');
+                    while (base64.length % 4) base64 += '=';
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+                    let jsonStr = '';
+                    if (prefix === 'C') { // Jika dikompresi
+                        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+                        jsonStr = await new Response(stream).text();
+                    } else if (prefix === 'U') { // Jika uncompressed
+                        jsonStr = new TextDecoder().decode(bytes);
+                    } else { // Format link lama
+                        jsonStr = decodeURIComponent(escape(atob(targetQ.replace(/-/g, '+').replace(/_/g, '/'))));
+                    }
+
+                    const decodedObj = JSON.parse(jsonStr);
+                    state.studentQuiz = {
+                        type: decodedObj.t || decodedObj.type,
+                        subject: decodedObj.s || decodedObj.subject,
+                        topic: decodedObj.tp || decodedObj.topic,
+                        time: decodedObj.tm || decodedObj.time,
+                        wa: decodedObj.w || decodedObj.wa,
+                        // Hanya baca text jika guru melakukan edit manual, jika tidak, otomatis rakit ulang
+                        text: decodedObj.x || decodedObj.text || getSmartQuestionsText(decodedObj.t || decodedObj.type, decodedObj.s || decodedObj.subject, decodedObj.tp || decodedObj.topic)
+                    };
+                    state.timeRemaining = (state.studentQuiz.time || 15) * 60;
+                    state.mode = 'student_start';
                 } catch (e) {
                     console.error("Gagal dekode:", e);
-                    alert("⚠️ Maaf, link kuis ini tidak valid atau formatnya rusak. Anda akan dikembalikan ke halaman utama.");
+                    alert("⚠️ Maaf, link kuis ini rusak atau terpotong. Mengembalikan ke halaman utama.");
                     window.location.href = window.location.origin + window.location.pathname;
                     return;
                 }
-            }
-
-            if (decodedObj) {
-                state.studentQuiz = decodedObj;
-                state.timeRemaining = (decodedObj.time || 15) * 60;
-                state.mode = 'student_start';
             } else {
-                generateSmartQuestions();
+                state.text = getSmartQuestionsText(state.type, state.subject, state.topic);
             }
             
             render();
@@ -161,7 +177,7 @@
 
         window.setType = function(type) {
             state.type = type;
-            generateSmartQuestions();
+            state.text = getSmartQuestionsText(state.type, state.subject, state.topic);
             render();
         };
 
@@ -170,23 +186,44 @@
             renderPreviewOnly();
         };
 
-        window.generateLink = function() {
-            const quizPayload = {
-                type: state.type,
-                subject: state.subject,
-                topic: state.topic,
-                text: state.text,
-                time: Number(state.timeLimit) || 15,
-                wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
+        window.generateLink = async function() {
+            const defaultText = getSmartQuestionsText(state.type, state.subject, state.topic);
+            
+            // Format Payload Mini (Sangat Hemat Karakter)
+            const payload = {
+                t: state.type,
+                s: state.subject,
+                tp: state.topic,
+                tm: Number(state.timeLimit) || 15,
+                w: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
-            // ENKODE AMAN: Mengubah base64 biasa ke format khusus URL (tanpa + / dan =)
-            const jsonStr = JSON.stringify(quizPayload);
-            const base64 = btoa(encodeURIComponent(jsonStr));
-            const safeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            
+            // HANYA simpan soal ke dalam link JIKA guru mengubahnya secara manual
+            if (state.text.trim() !== defaultText.trim()) {
+                payload.x = state.text;
+            }
+
+            const jsonStr = JSON.stringify(payload);
+            let encodedStr = '';
+
+            try {
+                // Kompresi Native Browser Super Kuat
+                const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+                const buffer = await new Response(stream).arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                encodedStr = 'C' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            } catch (e) {
+                // Fallback untuk browser lawas
+                const utf8Bytes = new TextEncoder().encode(jsonStr);
+                let binary = '';
+                for (let i = 0; i < utf8Bytes.length; i++) binary += String.fromCharCode(utf8Bytes[i]);
+                encodedStr = 'U' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+
             let baseUrl = window.location.origin + window.location.pathname;
-            state.rawShareUrl = `${baseUrl}?q=${safeBase64}`;
+            state.rawShareUrl = `${baseUrl}?q=${encodedStr}`;
             state.showModal = true;
             render();
         };
@@ -402,7 +439,7 @@
                             <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
                                 <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button>
                                 <h2 class="text-xl font-bold mb-1">Link Kuis Siswa</h2>
-                                <p class="text-xs text-slate-500 mb-4">Link aman, anti-potong, dan bebas dari library eksternal.</p>
+                                <p class="text-xs text-slate-500 mb-4">Link ini sudah diperpendek dan 100% aman untuk dibagikan ke WhatsApp.</p>
                                 <input type="text" readonly value="${state.rawShareUrl}" class="w-full bg-slate-100 border rounded-xl p-3 text-xs text-blue-600 font-mono mb-4">
                                 <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">Salin Link Kuis</button>
                                 <div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 mt-2"></div>
@@ -480,7 +517,7 @@
             renderPreviewOnly();
         }
 
-        window.onload = init;
+        window.onload = () => { init(); };
     </script>
 </body>
 </html>
