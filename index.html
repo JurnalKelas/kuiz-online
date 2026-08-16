@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tambahan Library Kompresi untuk Memendekkan Link -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         .a4-paper {
             width: 210mm;
@@ -114,9 +116,9 @@
             let lines = [];
             for (let i = 1; i <= 25; i++) {
                 if (type === 'mc') {
-                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${topic} dalam mata pelajaran ${subject}? | Pilihan jawaban A yang paling tepat | Pilihan jawaban B alternatif | Pilihan jawaban C pengecoh | Pilihan jawaban D pengecoh | A`);
+                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${topic} dalam mata pelajaran ${subject}? | Pilihan A yang tepat | Pilihan B alternatif | Pilihan C pengecoh | Pilihan D pengecoh | A`);
                 } else if (type === 'matching') {
-                    lines.push(`Istilah kunci ${i} (${topic}) - Pasangan definisi yang sesuai dengan nomor ${i}`);
+                    lines.push(`Istilah kunci ${i} (${topic}) - Pasangan definisi yang sesuai untuk nomor ${i}`);
                 } else if (type === 'tf') {
                     lines.push(`Pernyataan ${i} terkait materi ${topic} bernilai benar atau salah.`);
                 } else {
@@ -133,16 +135,21 @@
 
         function init() {
             const params = new URLSearchParams(window.location.search);
-            const targetQ = params.get('q') || params.get('z');
+            const targetQ = params.get('q');
             
             let decodedObj = null;
             if (targetQ) {
                 try {
-                    // Mendekode string Base64 yang aman URL
-                    const jsonStr = decodeURIComponent(escape(atob(targetQ.replace(/-/g, '+').replace(/_/g, '/'))));
-                    decodedObj = JSON.parse(jsonStr);
+                    // Dekompresi data link agar aman dan tidak terpotong
+                    const decompressed = LZString.decompressFromEncodedURIComponent(targetQ);
+                    if (!decompressed) throw new Error("Data terpotong");
+                    decodedObj = JSON.parse(decompressed);
                 } catch (e) {
                     console.error("Gagal dekode:", e);
+                    alert("⚠️ Maaf, link kuis ini tidak valid atau terpotong saat dibagikan. Silakan minta guru Anda mengirim ulang link yang lengkap.");
+                    // Kembalikan ke halaman utama jika link rusak
+                    window.location.href = window.location.origin + window.location.pathname;
+                    return;
                 }
             }
 
@@ -178,13 +185,11 @@
                 wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
-            // Menggunakan encode Base64 yang aman untuk URL (URL-safe Base64)
-            const jsonStr = unescape(encodeURIComponent(JSON.stringify(quizPayload)));
-            const base64Str = btoa(jsonStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            // Kompresi tingkat tinggi agar URL pendek dan kebal pemotongan WhatsApp
+            const compressedStr = LZString.compressToEncodedURIComponent(JSON.stringify(quizPayload));
             
-            // Memastikan path bersih tanpa dobel slash
             let baseUrl = window.location.origin + window.location.pathname;
-            state.rawShareUrl = `${baseUrl}?q=${base64Str}`;
+            state.rawShareUrl = `${baseUrl}?q=${compressedStr}`;
             state.showModal = true;
             render();
         };
@@ -400,8 +405,9 @@
                             <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
                                 <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button>
                                 <h2 class="text-xl font-bold mb-1">Link Kuis Siswa</h2>
+                                <p class="text-xs text-slate-500 mb-4">Link sekarang sudah dikompresi (sangat pendek dan dijamin bisa dibuka)!</p>
                                 <input type="text" readonly value="${state.rawShareUrl}" class="w-full bg-slate-100 border rounded-xl p-3 text-xs text-blue-600 font-mono mb-4">
-                                <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">Salin Link</button>
+                                <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">Salin Link Kuis</button>
                                 <div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 mt-2"></div>
                             </div>
                         </div>
@@ -410,8 +416,8 @@
                     <header class="bg-white shadow-sm border-b px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
                         <div class="font-black text-xl text-blue-600">✏️ EduGenerator Pro</div>
                         <div class="flex gap-3">
-                            <button onclick="window.generateLink()" class="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium">Bagikan Online</button>
-                            <button onclick="window.triggerPrint()" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium">Cetak Kertas</button>
+                            <button onclick="window.generateLink()" class="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm">Bagikan Online</button>
+                            <button onclick="window.triggerPrint()" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm">Cetak Kertas</button>
                         </div>
                     </header>
 
