@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
+    <title>EduGenerator Pro - Ujian Online & Lembar Kerja AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .a4-paper {
@@ -115,8 +115,8 @@
         let state = {
             mode: 'teacher',
             type: 'mc',
-            subject: 'Bahasa Indonesia / Umum',
-            topic: 'Pemahaman Teks dan Evaluasi Membaca',
+            subject: 'Bahasa Inggris / Umum',
+            topic: 'Simple Present Tense & Daily Routine',
             instructions: 'Jawablah pertanyaan-pertanyaan di bawah ini dengan teliti dan benar!',
             text: '',
             timeLimit: 15,
@@ -134,29 +134,59 @@
 
         window.appState = state;
 
-        function generateAutoQuestions() {
-            const subject = state.subject || 'Pelajaran';
-            const topic = state.topic || 'Materi Pembelajaran';
+        async function generateAIQuestions() {
+            const subject = state.subject;
+            const topic = state.topic;
             const type = state.type;
 
-            let lines = [];
-            for (let i = 1; i <= 25; i++) {
-                if (type === 'mc') {
-                    lines.push(`Pertanyaan nomor ${i} mengenai ${topic} dalam mata pelajaran ${subject}? | Pilihan A yang relevan | Pilihan B yang relevan | Pilihan C yang relevan | Pilihan D yang relevan | A`);
-                } else if (type === 'matching') {
-                    lines.push(`Istilah kunci ${i} tentang ${topic} - Definisi atau pasangan yang sesuai untuk nomor ${i}`);
-                } else if (type === 'tf') {
-                    lines.push(`Pernyataan ${i} terkait konsep ${topic} bernilai benar atau salah.`);
-                } else {
-                    lines.push(`Pertanyaan ${i} untuk mengevaluasi pemahaman siswa pada materi ${topic}?`);
+            state.text = "⏳ Sedang membuat 25 soal berkualitas tinggi menggunakan Gemini AI...";
+            render();
+
+            const prompt = `Bertindaklah sebagai ahli kurikulum dan guru profesional. Buatkan tepat 25 soal untuk mata pelajaran "${subject}" dengan topik/materi "${topic}" dengan tipe soal: ${type}.
+            Aturan Format Wajib:
+            - Jika tipe 'mc' (Pilihan Ganda): Format per baris persis: Pertanyaan | Pilihan A | Pilihan B | Pilihan C | Pilihan D | Kunci (A/B/C/D)
+            - Jika tipe 'matching' (Menjodohkan): Format per baris: Istilah - Pasangan
+            - Untuk tipe lainnya: Tuliskan soal yang relevan satu per baris.
+            Hasilkan hanya teks soalnya saja dari nomor 1 sampai 25 tanpa nomor urut di awal baris, tanpa teks pengantar atau penutup, langsung teks soal siap pakai.`;
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: {
+                    parts: [{ text: "Anda adalah asisten AI guru profesional pembuat soal ujian yang akurat dan sesuai kurikulum." }]
+                }
+            };
+
+            let success = false;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        state.text = candidate.content.parts[0].text.trim();
+                        success = true;
+                        break;
+                    }
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, (attempt + 1) * 1000));
                 }
             }
-            state.text = lines.join('\n');
+
+            if (!success) {
+                state.text = "Gagal memuat AI. Silakan coba klik tombol generate lagi.";
+            }
             render();
         }
 
         function init() {
-            generateAutoQuestions();
+            generateAIQuestions();
 
             const params = new URLSearchParams(window.location.search);
             const rawQ = params.get('q');
@@ -185,11 +215,11 @@
 
         window.setType = function(type) {
             state.type = type;
-            generateAutoQuestions();
+            generateAIQuestions();
         }
 
         window.generate25Auto = function() {
-            generateAutoQuestions();
+            generateAIQuestions();
         }
 
         window.updateText = function(text) {
@@ -216,10 +246,13 @@
         }
 
         window.copyLink = function() {
-            const input = document.createElement('textarea');
-            input.value = state.rawShareUrl;
-            document.body.appendChild(input);
-            input.select();
+            const textToCopy = state.rawShareUrl;
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            textarea.style.position = 'fixed';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
             try {
                 document.execCommand('copy');
                 const msg = document.getElementById('copy-feedback');
@@ -228,9 +261,9 @@
                     setTimeout(() => { msg.innerText = ''; }, 4000);
                 }
             } catch (err) {
-                alert('Gagal menyalin otomatis. Silakan salin manual.');
+                console.error('Gagal menyalin:', err);
             }
-            document.body.removeChild(input);
+            document.body.removeChild(textarea);
         }
 
         window.triggerPrint = function() {
@@ -487,6 +520,8 @@
                 return;
             }
 
+            const activeTypeObj = QUESTION_TYPES.flatMap(c => c.items).find(i => i.id === state.type);
+
             app.innerHTML = `
                 <div class="min-h-screen flex flex-col">
                     ${state.showModal ? `
@@ -514,7 +549,7 @@
 
                     <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
                         <div class="flex items-center gap-2 text-blue-600 font-black text-xl tracking-tight">
-                            <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">Ready</span>
+                            <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">AI Powered</span>
                         </div>
                         <div class="flex gap-3">
                             <button onclick="window.generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
@@ -562,7 +597,7 @@
                             </div>
 
                             <button onclick="window.generate25Auto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition text-sm flex justify-center items-center gap-2 shadow-sm">
-                                <span>⚡</span> Generate 25 Soal Otomatis (${state.topic})
+                                <span>🤖</span> Generate 25 Soal AI Otomatis (${state.topic})
                             </button>
 
                             ${state.type === 'mc' ? `
@@ -581,7 +616,7 @@
                             </div>
 
                             <div class="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 leading-relaxed">
-                                💡 <strong>Info:</strong> Klik tombol kuning di atas untuk meracik 25 soal baru secara instan sesuai Mapel & Topik Anda!
+                                💡 <strong>Info AI:</strong> Klik tombol kuning untuk membuat ulang 25 soal baru secara otomatis menggunakan Gemini AI sesuai Mapel & Topik Anda!
                             </div>
                         </aside>
 
