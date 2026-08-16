@@ -1,30 +1,16 @@
-<!-- Chosen Palette: Slate & Blue Clean Educational Palette -->
-<!-- Application Structure Plan: Single Page Application (SPA) Worksheet & Quiz Generator with fixed print CSS engine. Features:
-  1. Material/Topic Header Controls (Mata Pelajaran, Judul Materi, Petunjuk Pengerjaan).
-  2. 25 Comprehensive Question Types.
-  3. One-click "⚡ Generate 25 Soal Otomatis" feature.
-  4. Bulletproof A4 Paper Print Layout (forces parent containers to unclip overflow during window.print()).
-  5. Student Online Exam Mode with timer and auto-grading.
-  6. LZ-String compression and short link generator for student online quizzes.
-  7. Zero external graphical dependencies except Tailwind CSS CDN and LZString script. -->
-<!-- Visualization & Content Choices: Clean HTML DOM components for A4 print layout and interactive exam screens. Unicode emojis for UI icons. NO SVG graphics used. NO Mermaid JS used. -->
-<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGenerator Pro - Pembuat Soal & Lembar Kerja (25 Tipe Soal)</title>
+    <title>EduGenerator Pro - Pembuat Soal & Rekap Nilai Otomatis</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- LZ-String Library untuk kompresi data URL -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         .a4-paper {
             width: 210mm;
             min-height: 297mm;
         }
 
-        /* PERBAIKAN TOTAL UNTUK MODE CETAK (PRINT ENGINE FIX) */
         @media print {
             @page {
                 size: A4 portrait;
@@ -67,8 +53,37 @@
 
     <div id="app"></div>
 
-    <script>
-        // --- 25 TIPE SOAL LENGKAP & PRESET DEFAULT ---
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'edu-generator-pro-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        let app, db, auth, currentUser = null;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    currentUser = auth.currentUser;
+                } catch (e) {
+                    console.error("Auth error:", e);
+                }
+            };
+            initAuth();
+        } catch (e) {
+            console.log("Firebase initialized in offline mode or standalone.");
+        }
+
         const QUESTION_TYPES = [
             {
                 category: "Pilihan & Logika",
@@ -127,7 +142,6 @@
             }
         ];
 
-        // --- AUTOMATED GENERATOR 25 SOAL ---
         function generate25QuestionsText(type, subject, topic) {
             let lines = [];
             for (let i = 1; i <= 25; i++) {
@@ -217,7 +231,6 @@
             return lines.join('\n');
         }
 
-        // --- STATE APLIKASI ---
         let state = {
             mode: 'teacher',
             type: 'mc',
@@ -227,103 +240,77 @@
             text: '',
             timeLimit: 15,
             rawShareUrl: '',
-            shortShareUrl: '',
-            isShortening: false,
-            compressedRatio: 0,
             showModal: false,
+            showResultsModal: false,
             studentQuiz: null,
+            studentName: '',
+            studentClass: '',
             studentAnswers: {},
             timeRemaining: 0,
             timerInterval: null,
-            scoreResult: null
+            scoreResult: null,
+            submissions: []
         };
+
+        window.appState = state;
 
         function init() {
             state.text = generate25QuestionsText(state.type, state.subject, state.topic);
 
             const params = new URLSearchParams(window.location.search);
-            const zData = params.get('z'); 
-            const qData = params.get('q'); 
+            const qData = params.get('q');
             
             let decodedObj = null;
 
-            if (zData) {
-                try {
-                    const decompressed = LZString.decompressFromEncodedURIComponent(zData);
-                    if (decompressed) {
-                        const raw = JSON.parse(decompressed);
-                        decodedObj = {
-                            type: raw.t,
-                            subject: raw.s,
-                            topic: raw.tp,
-                            text: raw.tx,
-                            time: raw.tm
-                        };
-                    }
-                } catch (e) {
-                    console.error("Gagal dekompresi zData", e);
-                }
-            } else if (qData) {
+            if (qData) {
                 try {
                     decodedObj = JSON.parse(decodeURIComponent(atob(qData)));
+                    state.studentQuiz = decodedObj;
+                    state.timeRemaining = (decodedObj.time || 15) * 60;
+                    state.mode = 'student_start';
                 } catch (e) {
-                    console.error("Gagal dekode qData", e);
+                    console.error("Gagal dekode kuis", e);
                 }
             }
 
-            if (decodedObj) {
-                state.studentQuiz = decodedObj;
-                state.timeRemaining = (decodedObj.time || 15) * 60;
-                state.mode = 'student_start';
+            if (db) {
+                try {
+                    const qCol = collection(db, 'artifacts', appId, 'public', 'data', 'quiz_submissions');
+                    onSnapshot(qCol, (snapshot) => {
+                        const list = [];
+                        snapshot.forEach(docSnap => {
+                            list.push({ id: docSnap.id, ...docSnap.data() });
+                        });
+                        state.submissions = list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                        if (state.showResultsModal) render();
+                    }, (err) => {
+                        console.log("Snapshot notice:", err);
+                    });
+                } catch (e) {
+                    console.log("Firestore not available in this mode.");
+                }
             }
             
             render();
         }
 
-        function setType(type) {
+        window.setType = function(type) {
             state.type = type;
             state.text = generate25QuestionsText(type, state.subject, state.topic);
             render();
         }
 
-        function generate25Auto() {
+        window.generate25Auto = function() {
             state.text = generate25QuestionsText(state.type, state.subject, state.topic);
             render();
         }
 
-        function updateText(text) {
+        window.updateText = function(text) {
             state.text = text;
             renderPreviewOnly();
         }
 
-        function shortenUrlWithJSONP(longUrl) {
-            return new Promise((resolve, reject) => {
-                const callbackName = 'isgd_cb_' + Math.floor(Math.random() * 1000000);
-                window[callbackName] = function(data) {
-                    delete window[callbackName];
-                    const scriptEl = document.getElementById(callbackName);
-                    if (scriptEl) scriptEl.remove();
-                    
-                    if (data && data.shorturl) {
-                        resolve(data.shorturl);
-                    } else {
-                        reject(data.errormessage || 'Gagal memotong link');
-                    }
-                };
-
-                const script = document.createElement('script');
-                script.id = callbackName;
-                script.src = `https://is.gd/create.php?format=jsonp&callback=${callbackName}&url=${encodeURIComponent(longUrl)}`;
-                script.onerror = () => {
-                    delete window[callbackName];
-                    script.remove();
-                    reject('Jaringan offline / terhalang');
-                };
-                document.body.appendChild(script);
-            });
-        }
-
-        async function generateLink() {
+        window.generateLink = function() {
             const compactData = { 
                 t: state.type, 
                 s: state.subject,
@@ -332,59 +319,47 @@
                 tm: state.timeLimit 
             };
             
-            const rawJsonStr = JSON.stringify(compactData);
-            const compressedStr = LZString.compressToEncodedURIComponent(rawJsonStr);
+            const encodedStr = btoa(encodeURIComponent(JSON.stringify(compactData)));
+            const shareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`;
             
-            const compressedUrl = `${window.location.origin}${window.location.pathname}?z=${compressedStr}`;
-            
-            const originalLength = rawJsonStr.length;
-            const compressedLength = compressedStr.length;
-            const ratio = Math.round((1 - (compressedLength / (originalLength * 1.5))) * 100);
-            
-            state.compressedRatio = ratio > 0 ? ratio : 65;
-            state.rawShareUrl = compressedUrl;
-            state.shortShareUrl = ''; 
+            state.rawShareUrl = shareUrl;
             state.showModal = true;
-            state.isShortening = true;
             render();
+        }
 
-            try {
-                const shortUrl = await shortenUrlWithJSONP(compressedUrl);
-                state.shortShareUrl = shortUrl;
-            } catch (err) {
-                console.log("JSONP shortener fallback to LZ string:", err);
-                state.shortShareUrl = compressedUrl;
-            } finally {
-                state.isShortening = false;
-                render();
+        window.copyLink = function() {
+            navigator.clipboard.writeText(state.rawShareUrl);
+            const msg = document.getElementById('copy-feedback');
+            if (msg) {
+                msg.innerText = '✅ Link berhasil disalin ke clipboard!';
+                setTimeout(() => { msg.innerText = ''; }, 3000);
             }
         }
 
-        function copyLink() {
-            const linkToCopy = state.shortShareUrl || state.rawShareUrl;
-            navigator.clipboard.writeText(linkToCopy);
-            alert('Link kuis pendek berhasil disalin! Silakan bagikan ke grup WhatsApp siswa.');
-        }
-
-        function triggerPrint() {
+        window.triggerPrint = function() {
             window.print();
         }
 
-        function startExam() {
+        window.startExam = function() {
+            if (!state.studentName.trim() || !state.studentClass.trim()) {
+                const errBox = document.getElementById('exam-error');
+                if (errBox) errBox.innerText = "Harap masukkan Nama Lengkap dan Kelas Anda terlebih dahulu!";
+                return;
+            }
             state.mode = 'student_exam';
             render();
             state.timerInterval = setInterval(() => {
                 state.timeRemaining--;
                 if (state.timeRemaining <= 0) {
                     clearInterval(state.timerInterval);
-                    submitExam();
+                    window.submitExam();
                 } else {
                     renderTimerOnly();
                 }
             }, 1000);
         }
 
-        function submitExam() {
+        window.submitExam = async function() {
             if (state.timerInterval) clearInterval(state.timerInterval);
             const lines = state.studentQuiz.text.split('\n').filter(l => l.trim() !== '' && !l.startsWith('---'));
             let correct = 0;
@@ -403,6 +378,24 @@
             const score = total > 0 ? Math.round((correct / total) * 100) : 100;
             state.scoreResult = { correct, total, score };
             state.mode = 'result';
+
+            if (db) {
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'quiz_submissions'), {
+                        name: state.studentName,
+                        className: state.studentClass,
+                        subject: state.studentQuiz.subject || 'Ujian',
+                        topic: state.studentQuiz.topic || 'Kuis',
+                        score: score,
+                        correct: correct,
+                        total: total,
+                        timestamp: Date.now()
+                    });
+                } catch (e) {
+                    console.error("Gagal menyimpan rekap nilai:", e);
+                }
+            }
+
             render();
         }
 
@@ -516,7 +509,7 @@
             previewContainer.innerHTML = html;
         }
 
-        function render() {
+        window.render = function() {
             const app = document.getElementById('app');
 
             if (state.mode === 'student_start') {
@@ -526,11 +519,25 @@
                             <div class="text-5xl mb-3">📝</div>
                             <h1 class="text-2xl font-bold mb-1 text-slate-800">${state.studentQuiz.subject || 'Ujian Online'}</h1>
                             <p class="text-blue-600 font-medium text-sm mb-4">${state.studentQuiz.topic || 'Lembar Kerja Siswa'}</p>
-                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm mb-6 text-left space-y-2">
+                            
+                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm mb-4 text-left space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Nama Lengkap Siswa:</label>
+                                    <input type="text" id="input-student-name" value="${state.studentName}" oninput="window.appState.studentName = this.value" placeholder="Contoh: Budi Santoso" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white outline-none focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Kelas:</label>
+                                    <input type="text" id="input-student-class" value="${state.studentClass}" oninput="window.appState.studentClass = this.value" placeholder="Contoh: 8A / 9B" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white outline-none focus:border-blue-500">
+                                </div>
+                                <div id="exam-error" class="text-xs text-red-600 font-bold"></div>
+                            </div>
+
+                            <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs mb-6 text-left space-y-1 text-slate-600">
                                 <div>⏱️ <strong>Durasi Waktu:</strong> ${state.studentQuiz.time} Menit</div>
                                 <div>📊 <strong>Jumlah Soal:</strong> ${state.studentQuiz.text.split('\n').filter(t=>t.trim()!=='').length} Pertanyaan</div>
                             </div>
-                            <button onclick="startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg text-base">
+
+                            <button onclick="window.startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg text-base">
                                 Mulai Kerjakan Sekarang
                             </button>
                         </div>
@@ -546,7 +553,7 @@
                     <div class="min-h-screen bg-slate-50 pb-20">
                         <div class="sticky top-0 bg-white shadow-sm border-b border-slate-200 p-4 flex justify-between items-center z-50 max-w-4xl mx-auto px-6">
                             <div>
-                                <h1 class="font-bold text-base text-slate-800">${state.studentQuiz.subject}</h1>
+                                <h1 class="font-bold text-base text-slate-800">${state.studentQuiz.subject} (${state.studentName} - ${state.studentClass})</h1>
                                 <p class="text-xs text-slate-500">${state.studentQuiz.topic}</p>
                             </div>
                             <div id="timer-display" class="font-mono text-xl font-bold px-4 py-1 rounded-full bg-slate-100 text-slate-700">
@@ -566,7 +573,7 @@
                                                     <label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${state.studentAnswers[idx] === labels[oIdx] ? 'border-blue-500 bg-blue-50 font-medium' : 'border-slate-200 hover:bg-slate-50'}">
                                                         <input type="radio" name="q-${idx}" value="${labels[oIdx]}" 
                                                             ${state.studentAnswers[idx] === labels[oIdx] ? 'checked' : ''} 
-                                                            onchange="state.studentAnswers[${idx}] = '${labels[oIdx]}'; render();" 
+                                                            onchange="window.appState.studentAnswers[${idx}] = '${labels[oIdx]}'; window.render();" 
                                                             class="w-4 h-4 text-blue-600">
                                                         <span class="text-sm">${labels[oIdx]}. ${opt}</span>
                                                     </label>
@@ -574,13 +581,13 @@
                                             </div>
                                         ` : `
                                             <textarea rows="3" placeholder="Tuliskan jawaban Anda di sini..." 
-                                                oninput="state.studentAnswers[${idx}] = this.value"
+                                                oninput="window.appState.studentAnswers[${idx}] = this.value"
                                                 class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
                                         `}
                                     </div>
                                 `;
                             }).join('')}
-                            <button onclick="submitExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg">
+                            <button onclick="window.submitExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg">
                                 ✅ Selesai & Kumpulkan Jawaban
                             </button>
                         </div>
@@ -595,13 +602,13 @@
                         <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
                             <div class="text-6xl mb-4">🏆</div>
                             <h1 class="text-3xl font-bold text-slate-800 mb-1">Ujian Selesai!</h1>
-                            <p class="text-slate-500 text-sm mb-6">Terima kasih telah menyelesaikan lembar ujian.</p>
+                            <p class="text-slate-500 text-sm mb-2">Terima kasih, <strong>${state.studentName}</strong> (${state.studentClass})</p>
+                            <p class="text-emerald-600 font-semibold text-xs mb-6">✅ Nilai Anda telah tercatat otomatis di sistem guru.</p>
                             <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-6">
                                 <div class="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Nilai Akhir</div>
                                 <div class="text-6xl font-black text-blue-600 mb-2">${state.scoreResult.score}</div>
                                 <div class="text-slate-600 text-sm">Benar <strong>${state.scoreResult.correct}</strong> dari <strong>${state.scoreResult.total}</strong> soal</div>
                             </div>
-                            <p class="text-xs text-slate-400">Silakan Screenshot layar ini untuk dikirimkan ke Guru Anda.</p>
                         </div>
                     </div>
                 `;
@@ -609,48 +616,65 @@
             }
 
             const activeTypeObj = QUESTION_TYPES.flatMap(c => c.items).find(i => i.id === state.type);
-            const activeDisplayUrl = state.shortShareUrl || state.rawShareUrl;
 
             app.innerHTML = `
                 <div class="min-h-screen flex flex-col">
                     ${state.showModal ? `
                         <div class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 modal-backdrop">
                             <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
-                                <button onclick="state.showModal = false; render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+                                <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
                                 
-                                <h2 class="text-xl font-bold mb-1 text-slate-800">🌐 Link Kuis Super Pendek</h2>
-                                <p class="text-slate-500 text-xs mb-4">Link telah dipotong otomatis menjadi sangat pendek agar mudah dikirim via WhatsApp.</p>
-
-                                <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-lg">⚡</span>
-                                        <div class="text-xs">
-                                            <div class="font-bold text-blue-800">
-                                                ${state.isShortening ? '⏳ Memotong link otomatis...' : (state.shortShareUrl ? 'Link Terpotong Super Pendek (~18 Karakter)' : 'Kompresi LZ-String Aktif')}
-                                            </div>
-                                            <div class="text-blue-600">${state.shortShareUrl ? 'Siap Bagikan ke Siswa' : `Ukuran hemat ~${state.compressedRatio}%`}</div>
-                                        </div>
-                                    </div>
-                                    <span class="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                        ${state.shortShareUrl ? 'is.gd API' : 'LZ-String'}
-                                    </span>
-                                </div>
+                                <h2 class="text-xl font-bold mb-1 text-slate-800">🌐 Link Kuis Online Siswa</h2>
+                                <p class="text-slate-500 text-xs mb-4">Bagikan link ini ke WhatsApp siswa. Siswa wajib mengisi nama & kelas, dan nilainya akan otomatis terekam.</p>
 
                                 <div class="mb-4">
-                                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Link Kuis Siswa (Siap Pakai):</label>
-                                    <input type="text" readonly value="${state.isShortening ? 'Sedang memproses link pendek...' : activeDisplayUrl}" class="w-full bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-blue-600 font-bold font-mono outline-none">
-                                </div>
-
-                                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 flex flex-col items-center text-center">
-                                    <span class="text-xs font-semibold text-slate-500 mb-2">Pindai QR Code via HP Siswa / Proyektor:</span>
-                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(activeDisplayUrl)}" 
-                                         alt="QR Code Kuis" class="w-36 h-36 rounded-lg border border-slate-300 shadow-sm bg-white p-1">
+                                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Link Kuis:</label>
+                                    <input type="text" readonly value="${state.rawShareUrl}" class="w-full bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-blue-600 font-bold font-mono outline-none">
                                 </div>
 
                                 <div class="space-y-2">
-                                    <button onclick="copyLink()" ${state.isShortening ? 'disabled' : ''} class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-md flex justify-center items-center gap-2">
-                                        <span>📋</span> Salin Link Kuis Pendek
+                                    <button onclick="window.copyLink()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-md flex justify-center items-center gap-2">
+                                        <span>📋</span> Salin Link Kuis
                                     </button>
+                                    <div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 h-4"></div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${state.showResultsModal ? `
+                        <div class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 modal-backdrop">
+                            <div class="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl relative max-h-[85vh] flex flex-col">
+                                <button onclick="window.appState.showResultsModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+                                
+                                <h2 class="text-xl font-bold mb-1 text-slate-800">📊 Rekap Nilai Siswa (Live Cloud)</h2>
+                                <p class="text-slate-500 text-xs mb-4">Daftar siswa yang telah menyelesaikan kuis secara online:</p>
+
+                                <div class="flex-1 overflow-auto border border-slate-200 rounded-xl">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-100 text-slate-700 uppercase sticky top-0">
+                                            <tr>
+                                                <th class="p-3">Waktu</th>
+                                                <th class="p-3">Nama Siswa</th>
+                                                <th class="p-3">Kelas</th>
+                                                <th class="p-3 text-center">Skor</th>
+                                                <th class="p-3 text-center">Benar / Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200">
+                                            ${state.submissions.length === 0 ? `
+                                                <tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada siswa yang mengumpulkan jawaban.</td></tr>
+                                            ` : state.submissions.map(sub => `
+                                                <tr class="hover:bg-slate-50">
+                                                    <td class="p-3 text-slate-500">${new Date(sub.timestamp).toLocaleTimeString()}</td>
+                                                    <td class="p-3 font-bold text-slate-800">${sub.name}</td>
+                                                    <td class="p-3">${sub.className}</td>
+                                                    <td class="p-3 text-center font-black text-blue-600 text-sm">${sub.score}</td>
+                                                    <td class="p-3 text-center">${sub.correct} / ${sub.total}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -661,10 +685,13 @@
                             <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">25 Tipe Soal</span>
                         </div>
                         <div class="flex gap-3">
-                            <button onclick="generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
+                            <button onclick="window.appState.showResultsModal = true; window.render();" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
+                                <span>📊</span> Rekap Nilai Siswa (${state.submissions.length})
+                            </button>
+                            <button onclick="window.generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
                                 <span>🌐</span> Bagikan Online
                             </button>
-                            <button onclick="triggerPrint()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
+                            <button onclick="window.triggerPrint()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
                                 <span>🖨️</span> Cetak Kertas (A4)
                             </button>
                         </div>
@@ -677,19 +704,19 @@
                                 <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">📌 Informasi Materi Pembelajaran</h3>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 mb-1">Mata Pelajaran</label>
-                                    <input type="text" value="${state.subject}" oninput="state.subject = this.value; renderPreviewOnly();" 
+                                    <input type="text" value="${state.subject}" oninput="window.appState.subject = this.value; renderPreviewOnly();" 
                                         class="w-full border border-slate-300 rounded-lg p-2 text-sm font-medium outline-none focus:border-blue-500 bg-white">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 mb-1">Judul Materi / Bab</label>
-                                    <input type="text" value="${state.topic}" oninput="state.topic = this.value; renderPreviewOnly();" 
+                                    <input type="text" value="${state.topic}" oninput="window.appState.topic = this.value; renderPreviewOnly();" 
                                         class="w-full border border-slate-300 rounded-lg p-2 text-sm font-medium outline-none focus:border-blue-500 bg-white">
                                 </div>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">1. Pilih Tipe Soal (25 Jenis)</label>
-                                <select onchange="setType(this.value)" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm font-medium bg-slate-50 outline-none focus:border-blue-500">
+                                <select onchange="window.setType(this.value)" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm font-medium bg-slate-50 outline-none focus:border-blue-500">
                                     ${QUESTION_TYPES.map(cat => `
                                         <optgroup label="${cat.category}">
                                             ${cat.items.map(item => `
@@ -700,14 +727,14 @@
                                 </select>
                             </div>
 
-                            <button onclick="generate25Auto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition text-sm flex justify-center items-center gap-2 shadow-sm">
+                            <button onclick="window.generate25Auto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition text-sm flex justify-center items-center gap-2 shadow-sm">
                                 <span>⚡</span> Generate 25 Soal Otomatis (${state.topic})
                             </button>
 
                             ${state.type === 'mc' ? `
                                 <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
                                     <label class="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Durasi Kuis Online (Menit)</label>
-                                    <input type="number" min="1" value="${state.timeLimit}" onchange="state.timeLimit = this.value" class="w-full border border-emerald-300 rounded-lg p-2 text-center font-bold text-emerald-900 bg-white outline-none">
+                                    <input type="number" min="1" value="${state.timeLimit}" onchange="window.appState.timeLimit = this.value" class="w-full border border-emerald-300 rounded-lg p-2 text-center font-bold text-emerald-900 bg-white outline-none">
                                 </div>
                             ` : ''}
 
@@ -716,7 +743,7 @@
                                     <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Edit Isi Soal</label>
                                     <span class="text-[11px] text-blue-600 font-semibold">${state.text.split('\n').filter(t=>t.trim()!=='').length} Soal Terdeteksi</span>
                                 </div>
-                                <textarea rows="9" oninput="updateText(this.value)" class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50">${state.text}</textarea>
+                                <textarea rows="9" oninput="window.updateText(this.value)" class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50">${state.text}</textarea>
                             </div>
 
                             <div class="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 leading-relaxed">
@@ -764,12 +791,3 @@
     </script>
 </body>
 </html>
-```eod
-
-### Langkah Update di GitHub Pages:
-1. Masuk ke repositori `kuis-online` Anda di **GitHub.com**.
-2. Klik file **`index.html`** lalu klik ikon **Pensil (Edit)** di kanan atas.
-3. Hapus seluruh isi kode lama, lalu **Paste** kode baru di atas.
-4. Klik tombol hijau **Commit changes**.
-5. Tunggu 1 menit, lalu buka link web Anda (`https://[username].github.io/kuis-online/`).
-6. Coba klik tombol **🖨️ Cetak Kertas (A4)** — Lembar soal A4 sekarang dijamin langsung tampil utuh, rapi, dan siap dicetak!
