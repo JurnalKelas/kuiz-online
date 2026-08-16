@@ -258,7 +258,8 @@
             state.text = generate25QuestionsText(state.type, state.subject, state.topic);
 
             const params = new URLSearchParams(window.location.search);
-            const qData = params.get('q');
+            const rawQ = params.get('q');
+            const qData = rawQ ? rawQ.replace(/ /g, '+') : null;
             
             let decodedObj = null;
 
@@ -625,7 +626,7 @@
                                 <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
                                 
                                 <h2 class="text-xl font-bold mb-1 text-slate-800">🌐 Link Kuis Online Siswa</h2>
-                                <p class="text-slate-500 text-xs mb-4">Pastikan Anda menyalin link di bawah ini dan membagikannya ke WhatsApp siswa. Siswa yang membuka link ini langsung masuk ke halaman ujian (tanpa menu guru).</p>
+                                <p class="text-slate-500 text-xs mb-4">Salin link di bawah ini dan bagikan ke WhatsApp siswa. Siswa yang membuka link ini langsung masuk ke halaman ujian tanpa menu guru.</p>
 
                                 <div class="mb-4">
                                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Link Kuis Siswa:</label>
