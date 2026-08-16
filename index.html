@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
+    <title>EduGenerator Pro - Ujian Online & Lembar Kerja AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
@@ -113,95 +113,6 @@
             }
         ];
 
-        function generate25QuestionsText(type, subject, topic) {
-            let lines = [];
-            for (let i = 1; i <= 25; i++) {
-                switch(type) {
-                    case 'mc':
-                        lines.push(`Soal Pilihan Ganda no ${i} (${topic})? | Opsi A | Opsi B | Opsi C | Opsi D | A`);
-                        break;
-                    case 'tf':
-                        lines.push(`Pernyataan no ${i} mengenai ${topic} adalah benar.`);
-                        break;
-                    case 'tf_correct':
-                        lines.push(`Pernyataan no ${i} salah pada konsep ${topic}. (Tulis perbaikannya)`);
-                        break;
-                    case 'odd_out':
-                        lines.push(`Item_${i}A, Item_${i}B, Item_${i}C, BEDA_${i}`);
-                        break;
-                    case 'fill':
-                        lines.push(`Pada materi ${topic}, poin no ${i} adalah ________.`);
-                        break;
-                    case 'cloze':
-                        lines.push(`Bagian (${i}) materi ${topic} menjelaskan ________ adalah kunci utama.`);
-                        break;
-                    case 'short_answer':
-                        lines.push(`Jelaskan poin ke-${i} dari topik ${topic}?`);
-                        break;
-                    case 'essay':
-                        lines.push(`Berikan analisis mendalam poin no ${i} tentang ${topic}!`);
-                        break;
-                    case 'matching':
-                        lines.push(`Istilah ${topic} #${i} - Pasangan #${i}`);
-                        break;
-                    case 'sequencing':
-                        lines.push(`Langkah ke-${i} proses ${topic}.`);
-                        break;
-                    case 'rearrange':
-                        lines.push(`ini - susunan - kata - acak - ${i}`);
-                        break;
-                    case 'dialogue_comp':
-                        lines.push(`Siswa A: Apa pendapatmu tentang ${topic} poin ${i}?\nSiswa B: Menurut saya ________.`);
-                        break;
-                    case 'dialogue_order':
-                        lines.push(`Dialog acak no ${i} diskusi ${topic}.`);
-                        break;
-                    case 'reading':
-                        if (i === 1) {
-                            lines.push(`TEKS BACAAN: ${topic.toUpperCase()}\nIni adalah teks bacaan untuk menjawab 25 soal di bawah.\n---`);
-                        }
-                        lines.push(`Berdasarkan teks, apa maksud poin ke-${i}?`);
-                        break;
-                    case 'error_id':
-                        lines.push(`Kalimat no ${i} [memiliki] kesalahan grammar ${topic}.`);
-                        break;
-                    case 'transform':
-                        lines.push(`Ubah kalimat no ${i} (${topic}) ke bentuk pasif/negatif!`);
-                        break;
-                    case 'word_form':
-                        lines.push(`Siswa harus ________ (TERAP) ilmu ${topic} pada soal ${i}.`);
-                        break;
-                    case 'syn_ant':
-                        lines.push(`Kata_${i} - [Sinonim & Antonim]`);
-                        break;
-                    case 'vocab':
-                        lines.push(`Istilah_${i} : Penjelasan kata kunci ${i}.`);
-                        break;
-                    case 'word_search':
-                        lines.push(`KATA${i} (Cari kata KATA${i})`);
-                        break;
-                    case 'picture':
-                        lines.push(`Amati gambar ${i}, jelaskan proses ${topic}!`);
-                        break;
-                    case 'listening':
-                        lines.push(`Track ${i}: Apa informasi utama tentang ${topic}?`);
-                        break;
-                    case 'speaking':
-                        lines.push(`Topik ${i}: Ceritakan pengalaman terkait ${topic}!`);
-                        break;
-                    case 'info_gap':
-                        lines.push(`Item #${i} - Data A: ____ - Data B: Lengkap`);
-                        break;
-                    case 'math_logic':
-                        lines.push(`Sebuah benda ada ${i} unit. Berapa total jika ditambah ${i * 2} unit?`);
-                        break;
-                    default:
-                        lines.push(`Pertanyaan no ${i} untuk ${topic}.`);
-                }
-            }
-            return lines.join('\n');
-        }
-
         let state = {
             mode: 'teacher',
             type: 'mc',
@@ -210,7 +121,7 @@
             instructions: 'Jawablah pertanyaan-pertanyaan di bawah ini dengan teliti dan benar!',
             text: '',
             timeLimit: 15,
-            teacherWhatsApp: '628123456789', // Default contoh nomor WA guru
+            teacherWhatsApp: '628123456789',
             rawShareUrl: '',
             showModal: false,
             studentQuiz: null,
@@ -224,8 +135,59 @@
 
         window.appState = state;
 
+        async function generateAIQuestions() {
+            const subject = state.subject;
+            const topic = state.topic;
+            const type = state.type;
+
+            state.text = "⏳ Sedang membuat 25 soal berkualitas tinggi menggunakan Gemini AI...";
+            render();
+
+            const prompt = `Bertindaklah sebagai ahli kurikulum dan guru profesional. Buatkan tepat 25 soal untuk mata pelajaran "${subject}" dengan topik/materi "${topic}" dengan tipe soal: ${type}.
+            Aturan Format Wajib:
+            - Jika tipe 'mc' (Pilihan Ganda): Format per baris persis: Pertanyaan | Pilihan A | Pilihan B | Pilihan C | Pilihan D | Kunci (A/B/C/D)
+            - Jika tipe 'matching' (Menjodohkan): Format per baris: Istilah - Pasangan
+            - Untuk tipe lainnya: Tuliskan soal yang relevan satu per baris.
+            Hasilkan hanya teks soalnya saja dari nomor 1 sampai 25 tanpa nomor urut di awal baris, tanpa teks pengantar atau penutup, langsung teks soal siap pakai.`;
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: {
+                    parts: [{ text: "Anda adalah asisten AI guru profesional pembuat soal ujian yang akurat dan sesuai kurikulum." }]
+                }
+            };
+
+            let success = false;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        state.text = candidate.content.parts[0].text.trim();
+                        success = true;
+                        break;
+                    }
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, (attempt + 1) * 1000));
+                }
+            }
+
+            if (!success) {
+                state.text = "Gagal memuat AI. Silakan coba klik tombol generate lagi.";
+            }
+            render();
+        }
+
         function init() {
-            state.text = generate25QuestionsText(state.type, state.subject, state.topic);
+            generateAIQuestions();
 
             const params = new URLSearchParams(window.location.search);
             const rawQ = params.get('q');
@@ -252,13 +214,11 @@
 
         window.setType = function(type) {
             state.type = type;
-            state.text = generate25QuestionsText(type, state.subject, state.topic);
-            render();
+            generateAIQuestions();
         }
 
         window.generate25Auto = function() {
-            state.text = generate25QuestionsText(state.type, state.subject, state.topic);
-            render();
+            generateAIQuestions();
         }
 
         window.updateText = function(text) {
@@ -393,7 +353,7 @@
                 lines.forEach((line, idx) => {
                     const parts = line.split('|').map(p => p.trim());
                     
-                    if (state.type === 'mc') {
+                    if (state.type === 'mc' && parts.length >= 5) {
                         html += `
                             <div class="mb-4 text-sm page-break-inside-avoid">
                                 <div class="flex gap-2 font-medium mb-1">
@@ -410,7 +370,7 @@
                                 </div>
                             </div>
                         `;
-                    } else if (state.type === 'matching') {
+                    } else if (state.type === 'matching' && line.includes('-')) {
                         const mParts = line.split('-').map(p => p.trim());
                         html += `
                             <div class="flex justify-between items-center mb-2 text-sm border-b border-dashed border-slate-200 pb-1 page-break-inside-avoid">
@@ -419,34 +379,11 @@
                                 <span class="w-1/3 text-right font-medium">${mParts[1] || '[ Pasangan ]'}</span>
                             </div>
                         `;
-                    } else if (state.type === 'picture') {
-                        html += `
-                            <div class="mb-5 text-sm page-break-inside-avoid">
-                                <div class="w-full h-28 bg-slate-100 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2">
-                                    📷 [ Ilustrasi Gambar Soal No. ${idx + 1} ]
-                                </div>
-                                <p><strong>${idx + 1}.</strong> ${line}</p>
-                            </div>
-                        `;
-                    } else if (state.type === 'listening') {
-                        html += `
-                            <div class="mb-3 text-sm flex items-start gap-2 page-break-inside-avoid">
-                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold shrink-0">🎧 Track ${idx + 1}</span>
-                                <span>${line}</span>
-                            </div>
-                        `;
-                    } else if (state.type === 'essay') {
-                        html += `
-                            <div class="mb-6 text-sm page-break-inside-avoid">
-                                <p class="font-medium mb-2">${idx + 1}. ${line}</p>
-                                <div class="w-full h-16 border-b border-dashed border-slate-300"></div>
-                            </div>
-                        `;
                     } else {
                         html += `
                             <div class="mb-3 text-sm flex gap-2 page-break-inside-avoid">
                                 <span class="font-bold shrink-0">${idx + 1}.</span>
-                                <span class="flex-1">${line}</span>
+                                <span class="flex-1">${line.split('|')[0]}</span>
                             </div>
                         `;
                     }
@@ -599,7 +536,7 @@
 
                     <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
                         <div class="flex items-center gap-2 text-blue-600 font-black text-xl tracking-tight">
-                            <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">25 Tipe Soal</span>
+                            <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">AI Powered</span>
                         </div>
                         <div class="flex gap-3">
                             <button onclick="window.generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
@@ -647,7 +584,7 @@
                             </div>
 
                             <button onclick="window.generate25Auto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition text-sm flex justify-center items-center gap-2 shadow-sm">
-                                <span>⚡</span> Generate 25 Soal Otomatis (${state.topic})
+                                <span>🤖</span> Generate 25 Soal AI Otomatis (${state.topic})
                             </button>
 
                             ${state.type === 'mc' ? `
@@ -666,8 +603,7 @@
                             </div>
 
                             <div class="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 leading-relaxed">
-                                💡 <strong>Format Tipe Ini:</strong><br>
-                                <code>${activeTypeObj ? activeTypeObj.hint : ''}</code>
+                                💡 <strong>Info AI:</strong> Klik tombol kuning untuk membuat ulang 25 soal baru secara otomatis menggunakan Gemini AI sesuai Mapel & Topik Anda!
                             </div>
                         </aside>
 
