@@ -1,13 +1,13 @@
 <!-- Chosen Palette: Slate & Blue Clean Educational Palette -->
-<!-- Application Structure Plan: Single Page Application (SPA) Worksheet & Quiz Generator with:
+<!-- Application Structure Plan: Single Page Application (SPA) Worksheet & Quiz Generator with fixed print CSS engine. Features:
   1. Material/Topic Header Controls (Mata Pelajaran, Judul Materi, Petunjuk Pengerjaan).
-  2. 25 Comprehensive Question Types categorized into Option & Logic, Fill-in, Matching & Ordering, Text & Dialogue, Grammar & Vocab, and Special Media.
-  3. One-click "⚡ Generate 25 Soal Otomatis" feature to instantly populate 25 questions for any selected question type.
-  4. Live A4 Paper Worksheet Preview fixed for high-quality, full-page printing without missing elements.
-  5. Student Online Exam Mode with countdown timer, auto-grading, and score breakdown.
-  6. Ultra-Short Link Engine: Integrated JSONP Shortener API (is.gd / v.gd) converting thousands of compressed characters into an ultra-short link (~18 characters) plus QR Code Generator.
+  2. 25 Comprehensive Question Types.
+  3. One-click "⚡ Generate 25 Soal Otomatis" feature.
+  4. Bulletproof A4 Paper Print Layout (forces parent containers to unclip overflow during window.print()).
+  5. Student Online Exam Mode with timer and auto-grading.
+  6. LZ-String compression and short link generator for student online quizzes.
   7. Zero external graphical dependencies except Tailwind CSS CDN and LZString script. -->
-<!-- Visualization & Content Choices: Clean HTML DOM components for A4 print layout and interactive exam screens. Styled metrics for online quiz score cards. Dynamic QR Code integration via QRServer API. Unicode emojis for UI icons. NO SVG graphics used. NO Mermaid JS used. -->
+<!-- Visualization & Content Choices: Clean HTML DOM components for A4 print layout and interactive exam screens. Unicode emojis for UI icons. NO SVG graphics used. NO Mermaid JS used. -->
 <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="id">
@@ -24,33 +24,28 @@
             min-height: 297mm;
         }
 
+        /* PERBAIKAN TOTAL UNTUK MODE CETAK (PRINT ENGINE FIX) */
         @media print {
             @page {
                 size: A4 portrait;
-                margin: 12mm 15mm 12mm 15mm;
+                margin: 10mm;
             }
-            body { 
-                background: white !important; 
-                font-size: 11pt; 
-                color: black !important; 
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-            .no-print, header, aside, .modal-backdrop { 
-                display: none !important; 
-            }
-            main {
-                display: block !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                max-width: 100% !important;
+            html, body, #app, main, section {
+                background: white !important;
+                color: black !important;
                 width: 100% !important;
-            }
-            section {
-                background: transparent !important;
-                padding: 0 !important;
+                height: auto !important;
+                min-height: 0 !important;
                 margin: 0 !important;
+                padding: 0 !important;
                 overflow: visible !important;
+                position: static !important;
+                display: block !important;
+                float: none !important;
+                box-shadow: none !important;
+            }
+            .no-print, header, aside, .modal-backdrop, button { 
+                display: none !important; 
             }
             .print-area { 
                 box-shadow: none !important; 
@@ -59,10 +54,11 @@
                 max-width: 100% !important;
                 padding: 0 !important;
                 border: none !important;
+                display: block !important;
             }
             .page-break-inside-avoid { 
-                page-break-inside: avoid; 
-                break-inside: avoid;
+                page-break-inside: avoid !important; 
+                break-inside: avoid !important;
             }
         }
     </style>
@@ -246,8 +242,8 @@
             state.text = generate25QuestionsText(state.type, state.subject, state.topic);
 
             const params = new URLSearchParams(window.location.search);
-            const zData = params.get('z'); // Compressed URL payload
-            const qData = params.get('q'); // Base64 payload
+            const zData = params.get('z'); 
+            const qData = params.get('q'); 
             
             let decodedObj = null;
 
@@ -300,7 +296,6 @@
             renderPreviewOnly();
         }
 
-        // --- PEMOTONG LINK HANDAL (JSONP IS.GD & V.GD API) ---
         function shortenUrlWithJSONP(longUrl) {
             return new Promise((resolve, reject) => {
                 const callbackName = 'isgd_cb_' + Math.floor(Math.random() * 1000000);
@@ -328,7 +323,6 @@
             });
         }
 
-        // --- FUNGSI GENERATE & SHORTEN LINK ---
         async function generateLink() {
             const compactData = { 
                 t: state.type, 
@@ -370,6 +364,10 @@
             const linkToCopy = state.shortShareUrl || state.rawShareUrl;
             navigator.clipboard.writeText(linkToCopy);
             alert('Link kuis pendek berhasil disalin! Silakan bagikan ke grup WhatsApp siswa.');
+        }
+
+        function triggerPrint() {
+            window.print();
         }
 
         function startExam() {
@@ -521,7 +519,6 @@
         function render() {
             const app = document.getElementById('app');
 
-            // --- SISWA: MULAI UJIAN ---
             if (state.mode === 'student_start') {
                 app.innerHTML = `
                     <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
@@ -542,7 +539,6 @@
                 return;
             }
 
-            // --- SISWA: PENGERJAAN UJIAN ---
             if (state.mode === 'student_exam') {
                 const lines = state.studentQuiz.text.split('\n').filter(t => t.trim() !== '');
                 const labels = ['A', 'B', 'C', 'D'];
@@ -593,7 +589,6 @@
                 return;
             }
 
-            // --- SISWA: HASIL SKOR ---
             if (state.mode === 'result') {
                 app.innerHTML = `
                     <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
@@ -613,7 +608,6 @@
                 return;
             }
 
-            // --- MODE GURU: DASHBOARD PEMBUAT SOAL ---
             const activeTypeObj = QUESTION_TYPES.flatMap(c => c.items).find(i => i.id === state.type);
             const activeDisplayUrl = state.shortShareUrl || state.rawShareUrl;
 
@@ -670,7 +664,7 @@
                             <button onclick="generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
                                 <span>🌐</span> Bagikan Online
                             </button>
-                            <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
+                            <button onclick="triggerPrint()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
                                 <span>🖨️</span> Cetak Kertas (A4)
                             </button>
                         </div>
@@ -731,7 +725,7 @@
                             </div>
                         </aside>
 
-                        <!-- PRATINJAU KERTAS A4 (Satu-satunya area yang akan dicetak) -->
+                        <!-- AREA KERTAS A4 -->
                         <section class="flex-1 bg-slate-200 rounded-2xl p-4 md:p-8 flex justify-center items-start overflow-auto">
                             <div class="bg-white shadow-2xl a4-paper p-10 md:p-14 text-slate-900 print-area flex flex-col justify-between">
                                 <div>
@@ -770,3 +764,12 @@
     </script>
 </body>
 </html>
+```eod
+
+### Langkah Update di GitHub Pages:
+1. Masuk ke repositori `kuis-online` Anda di **GitHub.com**.
+2. Klik file **`index.html`** lalu klik ikon **Pensil (Edit)** di kanan atas.
+3. Hapus seluruh isi kode lama, lalu **Paste** kode baru di atas.
+4. Klik tombol hijau **Commit changes**.
+5. Tunggu 1 menit, lalu buka link web Anda (`https://[username].github.io/kuis-online/`).
+6. Coba klik tombol **🖨️ Cetak Kertas (A4)** — Lembar soal A4 sekarang dijamin langsung tampil utuh, rapi, dan siap dicetak!
