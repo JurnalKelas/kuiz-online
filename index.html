@@ -124,8 +124,12 @@
                 }
             }
             state.text = lines.join('\n');
-            render();
         }
+
+        window.generate25Auto = function() {
+            generateSmartQuestions();
+            render();
+        };
 
         function init() {
             const params = new URLSearchParams(window.location.search);
@@ -156,16 +160,13 @@
         window.setType = function(type) {
             state.type = type;
             generateSmartQuestions();
-        }
-
-        window.generate25Auto = function() {
-            generateSmartQuestions();
-        }
+            render();
+        };
 
         window.updateText = function(val) {
             state.text = val;
             renderPreviewOnly();
-        }
+        };
 
         window.generateLink = function() {
             const quizPayload = {
@@ -181,7 +182,7 @@
             state.rawShareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`;
             state.showModal = true;
             render();
-        }
+        };
 
         window.copyLink = function() {
             const input = document.createElement('textarea');
@@ -196,11 +197,11 @@
                 alert('Gagal menyalin link.');
             }
             document.body.removeChild(input);
-        }
+        };
 
         window.triggerPrint = function() {
             window.print();
-        }
+        };
 
         window.startExam = function() {
             if (!state.studentName.trim() || !state.studentClass.trim()) {
@@ -224,7 +225,7 @@
                     }
                 }
             }, 1000);
-        }
+        };
 
         window.submitExam = function() {
             if (state.timerInterval) clearInterval(state.timerInterval);
@@ -244,12 +245,12 @@
             state.scoreResult = { correct, total, score: total > 0 ? Math.round((correct / total) * 100) : 100 };
             state.mode = 'result';
             render();
-        }
+        };
 
         window.sendScoreToWhatsApp = function() {
             const msg = `Halo Guru, saya telah menyelesaikan kuis:\n\n👤 Nama: ${state.studentName}\n🏫 Kelas: ${state.studentClass}\n📚 Mapel: ${state.studentQuiz.subject}\n🏆 Nilai Akhir: *${state.scoreResult.score}* (Benar ${state.scoreResult.correct} dari ${state.scoreResult.total})`;
             window.open(`https://wa.me/${state.studentQuiz.wa}?text=${encodeURIComponent(msg)}`, '_blank');
-        }
+        };
 
         function renderPreviewOnly() {
             const container = document.getElementById('preview-content');
