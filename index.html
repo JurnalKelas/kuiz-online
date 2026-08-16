@@ -133,14 +133,14 @@
 
         function init() {
             const params = new URLSearchParams(window.location.search);
-            const rawQ = params.get('q');
-            const rawZ = params.get('z');
-            const targetQ = rawQ || rawZ;
+            const targetQ = params.get('q') || params.get('z');
             
             let decodedObj = null;
             if (targetQ) {
                 try {
-                    decodedObj = JSON.parse(decodeURIComponent(atob(targetQ.replace(/ /g, '+'))));
+                    // Mendekode string Base64 yang aman URL
+                    const jsonStr = decodeURIComponent(escape(atob(targetQ.replace(/-/g, '+').replace(/_/g, '/'))));
+                    decodedObj = JSON.parse(jsonStr);
                 } catch (e) {
                     console.error("Gagal dekode:", e);
                 }
@@ -178,8 +178,13 @@
                 wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
-            const encodedStr = btoa(encodeURIComponent(JSON.stringify(quizPayload)));
-            state.rawShareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`;
+            // Menggunakan encode Base64 yang aman untuk URL (URL-safe Base64)
+            const jsonStr = unescape(encodeURIComponent(JSON.stringify(quizPayload)));
+            const base64Str = btoa(jsonStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            
+            // Memastikan path bersih tanpa dobel slash
+            let baseUrl = window.location.origin + window.location.pathname;
+            state.rawShareUrl = `${baseUrl}?q=${base64Str}`;
             state.showModal = true;
             render();
         };
