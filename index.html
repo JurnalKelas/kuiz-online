@@ -106,20 +106,25 @@
 
         window.appState = state;
 
-        function getInitialDefaultText(type, topic) {
+        function generateSmartQuestions() {
+            const subject = state.subject || 'Pelajaran';
+            const topic = state.topic || 'Materi';
+            const type = state.type;
+
             let lines = [];
             for (let i = 1; i <= 25; i++) {
                 if (type === 'mc') {
-                    lines.push(`Soal ${i} mengenai ${topic}? | Pilihan A | Pilihan B | Pilihan C | Pilihan D | A`);
+                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${topic} dalam mata pelajaran ${subject}? | Pilihan jawaban A yang paling tepat | Pilihan jawaban B alternatif | Pilihan jawaban C pengecoh | Pilihan jawaban D pengecoh | A`);
                 } else if (type === 'matching') {
-                    lines.push(`Istilah ${i} tentang ${topic} - Pasangan yang sesuai untuk ${i}`);
+                    lines.push(`Istilah kunci ${i} (${topic}) - Pasangan definisi yang sesuai dengan nomor ${i}`);
                 } else if (type === 'tf') {
-                    lines.push(`Pernyataan ${i} mengenai materi ${topic} bernilai benar atau salah.`);
+                    lines.push(`Pernyataan ${i} terkait materi ${topic} bernilai benar atau salah.`);
                 } else {
-                    lines.push(`Pertanyaan nomor ${i} untuk mengevaluasi materi ${topic}?`);
+                    lines.push(`Jelaskan secara ringkas mengenai konsep nomor ${i} pada materi ${topic}?`);
                 }
             }
-            return lines.join('\n');
+            state.text = lines.join('\n');
+            render();
         }
 
         function init() {
@@ -142,7 +147,7 @@
                 state.timeRemaining = (decodedObj.time || 15) * 60;
                 state.mode = 'student_start';
             } else {
-                state.text = getInitialDefaultText(state.type, state.topic);
+                generateSmartQuestions();
             }
             
             render();
@@ -150,13 +155,11 @@
 
         window.setType = function(type) {
             state.type = type;
-            state.text = getInitialDefaultText(type, state.topic);
-            render();
+            generateSmartQuestions();
         }
 
         window.generate25Auto = function() {
-            state.text = getInitialDefaultText(state.type, state.topic);
-            render();
+            generateSmartQuestions();
         }
 
         window.updateText = function(val) {
