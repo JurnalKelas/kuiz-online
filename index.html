@@ -1,69 +1,20 @@
-<!-- Chosen Palette: Slate & Blue Clean Educational Palette -->
-<!-- Application Structure Plan: Single Page Application (SPA) Worksheet & Quiz Generator with:
-  1. Material/Topic Header Controls (Mata Pelajaran, Judul Materi, Petunjuk Pengerjaan).
-  2. 25 Comprehensive Question Types categorized into Option & Logic, Fill-in, Matching & Ordering, Text & Dialogue, Grammar & Vocab, and Special Media.
-  3. One-click "⚡ Generate 25 Soal Otomatis" feature to instantly populate 25 questions for any selected question type.
-  4. Live A4 Paper Worksheet Preview fixed for high-quality, full-page printing without missing elements.
-  5. Student Online Exam Mode with countdown timer, auto-grading, and score breakdown.
-  6. Ultra-Short Link Engine: Integrated JSONP Shortener API (is.gd / v.gd) converting thousands of compressed characters into an ultra-short link (~18 characters) plus QR Code Generator.
-  7. Zero external graphical dependencies except Tailwind CSS CDN and LZString script. -->
-<!-- Visualization & Content Choices: Clean HTML DOM components for A4 print layout and interactive exam screens. Styled metrics for online quiz score cards. Dynamic QR Code integration via QRServer API. Unicode emojis for UI icons. NO SVG graphics used. NO Mermaid JS used. -->
-<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGenerator Pro - Pembuat Soal & Lembar Kerja (25 Tipe Soal)</title>
+    <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- LZ-String Library untuk kompresi data URL -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
-        .a4-paper {
-            width: 210mm;
-            min-height: 297mm;
-        }
-
+        .a4-paper { width: 210mm; min-height: 297mm; }
         @media print {
-            @page {
-                size: A4 portrait;
-                margin: 12mm 15mm 12mm 15mm;
+            @page { size: A4 portrait; margin: 10mm; }
+            html, body, #app, main, section {
+                background: white !important; color: black !important; width: 100% !important; height: auto !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; position: static !important; display: block !important; box-shadow: none !important;
             }
-            body { 
-                background: white !important; 
-                font-size: 11pt; 
-                color: black !important; 
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-            .no-print, header, aside, .modal-backdrop { 
-                display: none !important; 
-            }
-            main {
-                display: block !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                max-width: 100% !important;
-                width: 100% !important;
-            }
-            section {
-                background: transparent !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                overflow: visible !important;
-            }
-            .print-area { 
-                box-shadow: none !important; 
-                margin: 0 !important; 
-                width: 100% !important; 
-                max-width: 100% !important;
-                padding: 0 !important;
-                border: none !important;
-            }
-            .page-break-inside-avoid { 
-                page-break-inside: avoid; 
-                break-inside: avoid;
-            }
+            .no-print, header, aside, .modal-backdrop, button { display: none !important; }
+            .print-area { box-shadow: none !important; margin: 0 !important; width: 100% !important; padding: 0 !important; border: none !important; display: block !important; }
+            .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
         }
     </style>
 </head>
@@ -72,7 +23,6 @@
     <div id="app"></div>
 
     <script>
-        // --- 25 TIPE SOAL LENGKAP & PRESET DEFAULT ---
         const QUESTION_TYPES = [
             {
                 category: "Pilihan & Logika",
@@ -131,410 +81,285 @@
             }
         ];
 
-        // --- AUTOMATED GENERATOR 25 SOAL ---
-        function generate25QuestionsText(type, subject, topic) {
-            let lines = [];
-            for (let i = 1; i <= 25; i++) {
-                switch(type) {
-                    case 'mc':
-                        lines.push(`Soal Pilihan Ganda no ${i} (${topic})? | Opsi A | Opsi B | Opsi C | Opsi D | A`);
-                        break;
-                    case 'tf':
-                        lines.push(`Pernyataan no ${i} mengenai ${topic} adalah benar.`);
-                        break;
-                    case 'tf_correct':
-                        lines.push(`Pernyataan no ${i} salah pada konsep ${topic}. (Tulis perbaikannya)`);
-                        break;
-                    case 'odd_out':
-                        lines.push(`Item_${i}A, Item_${i}B, Item_${i}C, BEDA_${i}`);
-                        break;
-                    case 'fill':
-                        lines.push(`Pada materi ${topic}, poin no ${i} adalah ________.`);
-                        break;
-                    case 'cloze':
-                        lines.push(`Bagian (${i}) materi ${topic} menjelaskan ________ adalah kunci utama.`);
-                        break;
-                    case 'short_answer':
-                        lines.push(`Jelaskan poin ke-${i} dari topik ${topic}?`);
-                        break;
-                    case 'essay':
-                        lines.push(`Berikan analisis mendalam poin no ${i} tentang ${topic}!`);
-                        break;
-                    case 'matching':
-                        lines.push(`Istilah ${topic} #${i} - Pasangan #${i}`);
-                        break;
-                    case 'sequencing':
-                        lines.push(`Langkah ke-${i} proses ${topic}.`);
-                        break;
-                    case 'rearrange':
-                        lines.push(`ini - susunan - kata - acak - ${i}`);
-                        break;
-                    case 'dialogue_comp':
-                        lines.push(`Siswa A: Apa pendapatmu tentang ${topic} poin ${i}?\nSiswa B: Menurut saya ________.`);
-                        break;
-                    case 'dialogue_order':
-                        lines.push(`Dialog acak no ${i} diskusi ${topic}.`);
-                        break;
-                    case 'reading':
-                        if (i === 1) {
-                            lines.push(`TEKS BACAAN: ${topic.toUpperCase()}\nIni adalah teks bacaan untuk menjawab 25 soal di bawah.\n---`);
-                        }
-                        lines.push(`Berdasarkan teks, apa maksud poin ke-${i}?`);
-                        break;
-                    case 'error_id':
-                        lines.push(`Kalimat no ${i} [memiliki] kesalahan grammar ${topic}.`);
-                        break;
-                    case 'transform':
-                        lines.push(`Ubah kalimat no ${i} (${topic}) ke bentuk pasif/negatif!`);
-                        break;
-                    case 'word_form':
-                        lines.push(`Siswa harus ________ (TERAP) ilmu ${topic} pada soal ${i}.`);
-                        break;
-                    case 'syn_ant':
-                        lines.push(`Kata_${i} - [Sinonim & Antonim]`);
-                        break;
-                    case 'vocab':
-                        lines.push(`Istilah_${i} : Penjelasan kata kunci ${i}.`);
-                        break;
-                    case 'word_search':
-                        lines.push(`KATA${i} (Cari kata KATA${i})`);
-                        break;
-                    case 'picture':
-                        lines.push(`Amati gambar ${i}, jelaskan proses ${topic}!`);
-                        break;
-                    case 'listening':
-                        lines.push(`Track ${i}: Apa informasi utama tentang ${topic}?`);
-                        break;
-                    case 'speaking':
-                        lines.push(`Topik ${i}: Ceritakan pengalaman terkait ${topic}!`);
-                        break;
-                    case 'info_gap':
-                        lines.push(`Item #${i} - Data A: ____ - Data B: Lengkap`);
-                        break;
-                    case 'math_logic':
-                        lines.push(`Sebuah benda ada ${i} unit. Berapa total jika ditambah ${i * 2} unit?`);
-                        break;
-                    default:
-                        lines.push(`Pertanyaan no ${i} untuk ${topic}.`);
-                }
-            }
-            return lines.join('\n');
-        }
-
-        // --- STATE APLIKASI ---
         let state = {
             mode: 'teacher',
             type: 'mc',
-            subject: 'Bahasa Inggris / Umum',
-            topic: 'Simple Present Tense & Daily Routine',
+            subject: 'Bahasa Indonesia',
+            topic: 'Struktur Teks dan Pemahaman Bacaan',
             instructions: 'Jawablah pertanyaan-pertanyaan di bawah ini dengan teliti dan benar!',
             text: '',
             timeLimit: 15,
+            teacherWhatsApp: '628123456789',
             rawShareUrl: '',
-            shortShareUrl: '',
-            isShortening: false,
-            compressedRatio: 0,
             showModal: false,
             studentQuiz: null,
+            studentName: '',
+            studentClass: '',
             studentAnswers: {},
             timeRemaining: 0,
             timerInterval: null,
             scoreResult: null
         };
 
-        function init() {
-            state.text = generate25QuestionsText(state.type, state.subject, state.topic);
+        window.appState = state;
 
+        // Fungsi khusus untuk meracik teks secara identik di HP Guru dan HP Siswa
+        function getSmartQuestionsText(type, subject, topic) {
+            const subj = subject || 'Mata Pelajaran';
+            const top = topic || 'Materi';
+            let lines = [];
+            for (let i = 1; i <= 25; i++) {
+                if (type === 'mc') {
+                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${top} dalam mata pelajaran ${subj}? | Pilihan A yang tepat | Pilihan B alternatif | Pilihan C pengecoh | Pilihan D pengecoh | A`);
+                } else if (type === 'matching') {
+                    lines.push(`Istilah kunci ${i} (${top}) - Pasangan definisi yang sesuai untuk nomor ${i}`);
+                } else if (type === 'tf') {
+                    lines.push(`Pernyataan ${i} terkait materi ${top} bernilai benar atau salah.`);
+                } else {
+                    lines.push(`Jelaskan secara ringkas mengenai konsep nomor ${i} pada materi ${top}?`);
+                }
+            }
+            return lines.join('\n');
+        }
+
+        window.generate25Auto = function() {
+            state.text = getSmartQuestionsText(state.type, state.subject, state.topic);
+            render();
+        };
+
+        async function init() {
             const params = new URLSearchParams(window.location.search);
-            const zData = params.get('z'); // Compressed URL payload
-            const qData = params.get('q'); // Base64 payload
+            const targetQ = params.get('q');
             
-            let decodedObj = null;
-
-            if (zData) {
+            if (targetQ) {
                 try {
-                    const decompressed = LZString.decompressFromEncodedURIComponent(zData);
-                    if (decompressed) {
-                        const raw = JSON.parse(decompressed);
-                        decodedObj = {
-                            type: raw.t,
-                            subject: raw.s,
-                            topic: raw.tp,
-                            text: raw.tx,
-                            time: raw.tm
-                        };
+                    const prefix = targetQ.charAt(0);
+                    let base64 = targetQ.substring(1).replace(/-/g, '+').replace(/_/g, '/');
+                    while (base64.length % 4) base64 += '=';
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+                    let jsonStr = '';
+                    if (prefix === 'C') { // Jika dikompresi
+                        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+                        jsonStr = await new Response(stream).text();
+                    } else if (prefix === 'U') { // Jika uncompressed
+                        jsonStr = new TextDecoder().decode(bytes);
+                    } else { // Format link lama
+                        jsonStr = decodeURIComponent(escape(atob(targetQ.replace(/-/g, '+').replace(/_/g, '/'))));
                     }
-                } catch (e) {
-                    console.error("Gagal dekompresi zData", e);
-                }
-            } else if (qData) {
-                try {
-                    decodedObj = JSON.parse(decodeURIComponent(atob(qData)));
-                } catch (e) {
-                    console.error("Gagal dekode qData", e);
-                }
-            }
 
-            if (decodedObj) {
-                state.studentQuiz = decodedObj;
-                state.timeRemaining = (decodedObj.time || 15) * 60;
-                state.mode = 'student_start';
+                    const decodedObj = JSON.parse(jsonStr);
+                    state.studentQuiz = {
+                        type: decodedObj.t || decodedObj.type,
+                        subject: decodedObj.s || decodedObj.subject,
+                        topic: decodedObj.tp || decodedObj.topic,
+                        time: decodedObj.tm || decodedObj.time,
+                        wa: decodedObj.w || decodedObj.wa,
+                        // Hanya baca text jika guru melakukan edit manual, jika tidak, otomatis rakit ulang
+                        text: decodedObj.x || decodedObj.text || getSmartQuestionsText(decodedObj.t || decodedObj.type, decodedObj.s || decodedObj.subject, decodedObj.tp || decodedObj.topic)
+                    };
+                    state.timeRemaining = (state.studentQuiz.time || 15) * 60;
+                    state.mode = 'student_start';
+                } catch (e) {
+                    console.error("Gagal dekode:", e);
+                    alert("⚠️ Maaf, link kuis ini rusak atau terpotong. Mengembalikan ke halaman utama.");
+                    window.location.href = window.location.origin + window.location.pathname;
+                    return;
+                }
+            } else {
+                state.text = getSmartQuestionsText(state.type, state.subject, state.topic);
             }
             
             render();
         }
 
-        function setType(type) {
+        window.setType = function(type) {
             state.type = type;
-            state.text = generate25QuestionsText(type, state.subject, state.topic);
+            state.text = getSmartQuestionsText(state.type, state.subject, state.topic);
             render();
-        }
+        };
 
-        function generate25Auto() {
-            state.text = generate25QuestionsText(state.type, state.subject, state.topic);
-            render();
-        }
-
-        function updateText(text) {
-            state.text = text;
+        window.updateText = function(val) {
+            state.text = val;
             renderPreviewOnly();
-        }
+        };
 
-        // --- PEMOTONG LINK HANDAL (JSONP IS.GD & V.GD API) ---
-        function shortenUrlWithJSONP(longUrl) {
-            return new Promise((resolve, reject) => {
-                const callbackName = 'isgd_cb_' + Math.floor(Math.random() * 1000000);
-                window[callbackName] = function(data) {
-                    delete window[callbackName];
-                    const scriptEl = document.getElementById(callbackName);
-                    if (scriptEl) scriptEl.remove();
-                    
-                    if (data && data.shorturl) {
-                        resolve(data.shorturl);
-                    } else {
-                        reject(data.errormessage || 'Gagal memotong link');
-                    }
-                };
-
-                const script = document.createElement('script');
-                script.id = callbackName;
-                script.src = `https://is.gd/create.php?format=jsonp&callback=${callbackName}&url=${encodeURIComponent(longUrl)}`;
-                script.onerror = () => {
-                    delete window[callbackName];
-                    script.remove();
-                    reject('Jaringan offline / terhalang');
-                };
-                document.body.appendChild(script);
-            });
-        }
-
-        // --- FUNGSI GENERATE & SHORTEN LINK ---
-        async function generateLink() {
-            const compactData = { 
-                t: state.type, 
+        window.generateLink = async function() {
+            const defaultText = getSmartQuestionsText(state.type, state.subject, state.topic);
+            
+            // Format Payload Mini (Sangat Hemat Karakter)
+            const payload = {
+                t: state.type,
                 s: state.subject,
                 tp: state.topic,
-                tx: state.text, 
-                tm: state.timeLimit 
+                tm: Number(state.timeLimit) || 15,
+                w: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
-            const rawJsonStr = JSON.stringify(compactData);
-            const compressedStr = LZString.compressToEncodedURIComponent(rawJsonStr);
-            
-            const compressedUrl = `${window.location.origin}${window.location.pathname}?z=${compressedStr}`;
-            
-            const originalLength = rawJsonStr.length;
-            const compressedLength = compressedStr.length;
-            const ratio = Math.round((1 - (compressedLength / (originalLength * 1.5))) * 100);
-            
-            state.compressedRatio = ratio > 0 ? ratio : 65;
-            state.rawShareUrl = compressedUrl;
-            state.shortShareUrl = ''; 
-            state.showModal = true;
-            state.isShortening = true;
-            render();
+            // HANYA simpan soal ke dalam link JIKA guru mengubahnya secara manual
+            if (state.text.trim() !== defaultText.trim()) {
+                payload.x = state.text;
+            }
+
+            const jsonStr = JSON.stringify(payload);
+            let encodedStr = '';
 
             try {
-                const shortUrl = await shortenUrlWithJSONP(compressedUrl);
-                state.shortShareUrl = shortUrl;
-            } catch (err) {
-                console.log("JSONP shortener fallback to LZ string:", err);
-                state.shortShareUrl = compressedUrl;
-            } finally {
-                state.isShortening = false;
-                render();
+                // Kompresi Native Browser Super Kuat
+                const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+                const buffer = await new Response(stream).arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                encodedStr = 'C' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            } catch (e) {
+                // Fallback untuk browser lawas
+                const utf8Bytes = new TextEncoder().encode(jsonStr);
+                let binary = '';
+                for (let i = 0; i < utf8Bytes.length; i++) binary += String.fromCharCode(utf8Bytes[i]);
+                encodedStr = 'U' + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
             }
-        }
 
-        function copyLink() {
-            const linkToCopy = state.shortShareUrl || state.rawShareUrl;
-            navigator.clipboard.writeText(linkToCopy);
-            alert('Link kuis pendek berhasil disalin! Silakan bagikan ke grup WhatsApp siswa.');
-        }
+            let baseUrl = window.location.origin + window.location.pathname;
+            state.rawShareUrl = `${baseUrl}?q=${encodedStr}`;
+            state.showModal = true;
+            render();
+        };
 
-        function startExam() {
+        window.copyLink = function() {
+            const input = document.createElement('textarea');
+            input.value = state.rawShareUrl;
+            document.body.appendChild(input);
+            input.select();
+            try {
+                document.execCommand('copy');
+                const msg = document.getElementById('copy-feedback');
+                if (msg) msg.innerText = '✅ Link berhasil disalin!';
+            } catch (err) {
+                alert('Gagal menyalin link.');
+            }
+            document.body.removeChild(input);
+        };
+
+        window.triggerPrint = function() {
+            window.print();
+        };
+
+        window.startExam = function() {
+            if (!state.studentName.trim() || !state.studentClass.trim()) {
+                const errBox = document.getElementById('exam-error');
+                if (errBox) errBox.innerText = "Harap masukkan Nama dan Kelas Anda!";
+                return;
+            }
             state.mode = 'student_exam';
             render();
             state.timerInterval = setInterval(() => {
                 state.timeRemaining--;
                 if (state.timeRemaining <= 0) {
                     clearInterval(state.timerInterval);
-                    submitExam();
+                    window.submitExam();
                 } else {
-                    renderTimerOnly();
+                    const timerEl = document.getElementById('timer-display');
+                    if (timerEl) {
+                        const m = Math.floor(state.timeRemaining / 60);
+                        const s = state.timeRemaining % 60;
+                        timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+                    }
                 }
             }, 1000);
-        }
+        };
 
-        function submitExam() {
+        window.submitExam = function() {
             if (state.timerInterval) clearInterval(state.timerInterval);
-            const lines = state.studentQuiz.text.split('\n').filter(l => l.trim() !== '' && !l.startsWith('---'));
+            const lines = state.studentQuiz.text.split('\n').filter(l => l.trim() !== '');
             let correct = 0;
-            let totalEvaluated = 0;
+            let totalEval = 0;
 
             lines.forEach((line, idx) => {
                 const parts = line.split('|').map(p => p.trim());
                 if (parts.length >= 6) {
-                    totalEvaluated++;
-                    const key = parts[5] ? parts[5].toUpperCase() : '';
-                    if (state.studentAnswers[idx] === key) correct++;
+                    totalEval++;
+                    if (state.studentAnswers[idx] === parts[5].toUpperCase()) correct++;
                 }
             });
 
-            const total = totalEvaluated > 0 ? totalEvaluated : lines.length;
-            const score = total > 0 ? Math.round((correct / total) * 100) : 100;
-            state.scoreResult = { correct, total, score };
+            const total = totalEval > 0 ? totalEval : lines.length;
+            state.scoreResult = { correct, total, score: total > 0 ? Math.round((correct / total) * 100) : 100 };
             state.mode = 'result';
             render();
-        }
+        };
 
-        function formatTime(sec) {
-            const m = Math.floor(sec / 60);
-            const s = sec % 60;
-            return `${m}:${s < 10 ? '0' : ''}${s}`;
-        }
-
-        function renderTimerOnly() {
-            const timerEl = document.getElementById('timer-display');
-            if (timerEl) {
-                timerEl.innerText = formatTime(state.timeRemaining);
-                if (state.timeRemaining < 60) {
-                    timerEl.className = "font-mono text-xl font-bold px-4 py-1 rounded-full bg-red-100 text-red-600 animate-pulse";
-                }
-            }
-        }
+        window.sendScoreToWhatsApp = function() {
+            const msg = `Halo Guru, saya telah menyelesaikan kuis:\n\n👤 Nama: ${state.studentName}\n🏫 Kelas: ${state.studentClass}\n📚 Mapel: ${state.studentQuiz.subject}\n🏆 Nilai Akhir: *${state.scoreResult.score}* (Benar ${state.scoreResult.correct} dari ${state.scoreResult.total})`;
+            window.open(`https://wa.me/${state.studentQuiz.wa}?text=${encodeURIComponent(msg)}`, '_blank');
+        };
 
         function renderPreviewOnly() {
-            const previewContainer = document.getElementById('preview-content');
-            if (!previewContainer) return;
+            const container = document.getElementById('preview-content');
+            if (!container) return;
 
             const lines = state.text.split('\n').filter(t => t.trim() !== '');
             const labels = ['A', 'B', 'C', 'D'];
-
             let html = '';
 
-            if (state.type === 'reading') {
-                const parts = state.text.split('---');
-                const passage = parts[0] ? parts[0].trim() : '';
-                const qLines = parts[1] ? parts[1].trim().split('\n').filter(l => l.trim() !== '') : [];
-
-                html += `
-                    <div class="p-4 bg-slate-50 border border-slate-300 rounded-xl mb-6 text-sm text-justify leading-relaxed page-break-inside-avoid">
-                        ${passage.replace(/\n/g, '<br>')}
-                    </div>
-                    <h4 class="font-bold text-slate-800 mb-4 border-b pb-2">Soal Pertanyaan:</h4>
-                `;
-
-                qLines.forEach((q, idx) => {
-                    html += `<div class="mb-4 text-sm flex gap-2 page-break-inside-avoid">
-                        <span class="font-bold">${idx + 1}.</span>
-                        <div class="flex-1">${q}</div>
-                    </div>`;
-                });
-            } else {
-                lines.forEach((line, idx) => {
-                    const parts = line.split('|').map(p => p.trim());
-                    
-                    if (state.type === 'mc') {
-                        html += `
-                            <div class="mb-4 text-sm page-break-inside-avoid">
-                                <div class="flex gap-2 font-medium mb-1">
-                                    <span>${idx + 1}.</span>
-                                    <span class="flex-1">${parts[0]}</span>
-                                </div>
-                                <div class="grid grid-cols-2 gap-y-1.5 ml-5 text-xs text-slate-700">
-                                    ${parts.slice(1, 5).map((opt, oIdx) => `
-                                        <div class="flex items-center gap-2">
-                                            <span class="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] font-bold shrink-0">${labels[oIdx]}</span>
-                                            <span>${opt}</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
+            lines.forEach((line, idx) => {
+                const parts = line.split('|').map(p => p.trim());
+                if (state.type === 'mc' && parts.length >= 5) {
+                    html += `
+                        <div class="mb-4 text-sm page-break-inside-avoid">
+                            <div class="flex gap-2 font-medium mb-1">
+                                <span>${idx + 1}.</span>
+                                <span class="flex-1">${parts[0]}</span>
                             </div>
-                        `;
-                    } else if (state.type === 'matching') {
-                        const mParts = line.split('-').map(p => p.trim());
-                        html += `
-                            <div class="flex justify-between items-center mb-2 text-sm border-b border-dashed border-slate-200 pb-1 page-break-inside-avoid">
-                                <span class="w-1/2">${idx + 1}. ${mParts[0] || line}</span>
-                                <span class="text-slate-400 font-mono">-------------------------</span>
-                                <span class="w-1/3 text-right font-medium">${mParts[1] || '[ Pasangan ]'}</span>
+                            <div class="grid grid-cols-2 gap-y-1.5 ml-5 text-xs text-slate-700">
+                                ${parts.slice(1, 5).map((opt, oIdx) => `
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] font-bold">${labels[oIdx]}</span>
+                                        <span>${opt}</span>
+                                    </div>
+                                `).join('')}
                             </div>
-                        `;
-                    } else if (state.type === 'picture') {
-                        html += `
-                            <div class="mb-5 text-sm page-break-inside-avoid">
-                                <div class="w-full h-28 bg-slate-100 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2">
-                                    📷 [ Ilustrasi Gambar Soal No. ${idx + 1} ]
-                                </div>
-                                <p><strong>${idx + 1}.</strong> ${line}</p>
-                            </div>
-                        `;
-                    } else if (state.type === 'listening') {
-                        html += `
-                            <div class="mb-3 text-sm flex items-start gap-2 page-break-inside-avoid">
-                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold shrink-0">🎧 Track ${idx + 1}</span>
-                                <span>${line}</span>
-                            </div>
-                        `;
-                    } else if (state.type === 'essay') {
-                        html += `
-                            <div class="mb-6 text-sm page-break-inside-avoid">
-                                <p class="font-medium mb-2">${idx + 1}. ${line}</p>
-                                <div class="w-full h-16 border-b border-dashed border-slate-300"></div>
-                            </div>
-                        `;
-                    } else {
-                        html += `
-                            <div class="mb-3 text-sm flex gap-2 page-break-inside-avoid">
-                                <span class="font-bold shrink-0">${idx + 1}.</span>
-                                <span class="flex-1">${line}</span>
-                            </div>
-                        `;
-                    }
-                });
-            }
-
-            previewContainer.innerHTML = html;
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="mb-3 text-sm flex gap-2 page-break-inside-avoid">
+                            <span class="font-bold shrink-0">${idx + 1}.</span>
+                            <span class="flex-1">${line.split('|')[0]}</span>
+                        </div>
+                    `;
+                }
+            });
+            container.innerHTML = html;
         }
 
-        function render() {
+        window.render = function() {
             const app = document.getElementById('app');
 
-            // --- SISWA: MULAI UJIAN ---
             if (state.mode === 'student_start') {
                 app.innerHTML = `
                     <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
                         <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
                             <div class="text-5xl mb-3">📝</div>
-                            <h1 class="text-2xl font-bold mb-1 text-slate-800">${state.studentQuiz.subject || 'Ujian Online'}</h1>
-                            <p class="text-blue-600 font-medium text-sm mb-4">${state.studentQuiz.topic || 'Lembar Kerja Siswa'}</p>
-                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm mb-6 text-left space-y-2">
-                                <div>⏱️ <strong>Durasi Waktu:</strong> ${state.studentQuiz.time} Menit</div>
-                                <div>📊 <strong>Jumlah Soal:</strong> ${state.studentQuiz.text.split('\n').filter(t=>t.trim()!=='').length} Pertanyaan</div>
+                            <h1 class="text-2xl font-bold mb-1 text-slate-800">${state.studentQuiz.subject}</h1>
+                            <p class="text-blue-600 font-medium text-sm mb-4">${state.studentQuiz.topic}</p>
+                            
+                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm mb-4 text-left space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Nama Lengkap:</label>
+                                    <input type="text" value="${state.studentName}" oninput="window.appState.studentName = this.value" placeholder="Nama Siswa" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Kelas:</label>
+                                    <input type="text" value="${state.studentClass}" oninput="window.appState.studentClass = this.value" placeholder="Kelas" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white outline-none">
+                                </div>
+                                <div id="exam-error" class="text-xs text-red-600 font-bold"></div>
                             </div>
-                            <button onclick="startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg text-base">
-                                Mulai Kerjakan Sekarang
+
+                            <button onclick="window.startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg">
+                                Mulai Ujian
                             </button>
                         </div>
                     </div>
@@ -542,19 +367,17 @@
                 return;
             }
 
-            // --- SISWA: PENGERJAAN UJIAN ---
             if (state.mode === 'student_exam') {
                 const lines = state.studentQuiz.text.split('\n').filter(t => t.trim() !== '');
                 const labels = ['A', 'B', 'C', 'D'];
                 app.innerHTML = `
                     <div class="min-h-screen bg-slate-50 pb-20">
-                        <div class="sticky top-0 bg-white shadow-sm border-b border-slate-200 p-4 flex justify-between items-center z-50 max-w-4xl mx-auto px-6">
+                        <div class="sticky top-0 bg-white shadow-sm border-b p-4 flex justify-between items-center z-50 max-w-4xl mx-auto px-6">
                             <div>
-                                <h1 class="font-bold text-base text-slate-800">${state.studentQuiz.subject}</h1>
-                                <p class="text-xs text-slate-500">${state.studentQuiz.topic}</p>
+                                <h1 class="font-bold text-base text-slate-800">${state.studentQuiz.subject} (${state.studentName} - ${state.studentClass})</h1>
                             </div>
                             <div id="timer-display" class="font-mono text-xl font-bold px-4 py-1 rounded-full bg-slate-100 text-slate-700">
-                                ${formatTime(state.timeRemaining)}
+                                0:00
                             </div>
                         </div>
                         <div class="max-w-3xl mx-auto p-4 mt-6">
@@ -567,25 +390,22 @@
                                         ${isMC ? `
                                             <div class="flex flex-col gap-2.5 ml-2">
                                                 ${parts.slice(1, 5).map((opt, oIdx) => `
-                                                    <label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${state.studentAnswers[idx] === labels[oIdx] ? 'border-blue-500 bg-blue-50 font-medium' : 'border-slate-200 hover:bg-slate-50'}">
+                                                    <label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${state.studentAnswers[idx] === labels[oIdx] ? 'border-blue-500 bg-blue-50 font-medium' : 'border-slate-200'}">
                                                         <input type="radio" name="q-${idx}" value="${labels[oIdx]}" 
                                                             ${state.studentAnswers[idx] === labels[oIdx] ? 'checked' : ''} 
-                                                            onchange="state.studentAnswers[${idx}] = '${labels[oIdx]}'; render();" 
-                                                            class="w-4 h-4 text-blue-600">
+                                                            onchange="window.appState.studentAnswers[${idx}] = '${labels[oIdx]}'; window.render();">
                                                         <span class="text-sm">${labels[oIdx]}. ${opt}</span>
                                                     </label>
                                                 `).join('')}
                                             </div>
                                         ` : `
-                                            <textarea rows="3" placeholder="Tuliskan jawaban Anda di sini..." 
-                                                oninput="state.studentAnswers[${idx}] = this.value"
-                                                class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                                            <textarea rows="3" oninput="window.appState.studentAnswers[${idx}] = this.value" class="w-full border rounded-xl p-3 text-sm"></textarea>
                                         `}
                                     </div>
                                 `;
                             }).join('')}
-                            <button onclick="submitExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg">
-                                ✅ Selesai & Kumpulkan Jawaban
+                            <button onclick="window.submitExam()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg">
+                                Selesai & Kumpulkan Jawaban
                             </button>
                         </div>
                     </div>
@@ -593,180 +413,111 @@
                 return;
             }
 
-            // --- SISWA: HASIL SKOR ---
             if (state.mode === 'result') {
                 app.innerHTML = `
                     <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
                         <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
                             <div class="text-6xl mb-4">🏆</div>
                             <h1 class="text-3xl font-bold text-slate-800 mb-1">Ujian Selesai!</h1>
-                            <p class="text-slate-500 text-sm mb-6">Terima kasih telah menyelesaikan lembar ujian.</p>
-                            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-6">
-                                <div class="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Nilai Akhir</div>
+                            <div class="bg-slate-50 border rounded-2xl p-6 mb-6">
                                 <div class="text-6xl font-black text-blue-600 mb-2">${state.scoreResult.score}</div>
                                 <div class="text-slate-600 text-sm">Benar <strong>${state.scoreResult.correct}</strong> dari <strong>${state.scoreResult.total}</strong> soal</div>
                             </div>
-                            <p class="text-xs text-slate-400">Silakan Screenshot layar ini untuk dikirimkan ke Guru Anda.</p>
+                            <button onclick="window.sendScoreToWhatsApp()" class="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg">
+                                Kirim Nilai ke WhatsApp Guru
+                            </button>
                         </div>
                     </div>
                 `;
                 return;
             }
 
-            // --- MODE GURU: DASHBOARD PEMBUAT SOAL ---
-            const activeTypeObj = QUESTION_TYPES.flatMap(c => c.items).find(i => i.id === state.type);
-            const activeDisplayUrl = state.shortShareUrl || state.rawShareUrl;
-
             app.innerHTML = `
                 <div class="min-h-screen flex flex-col">
                     ${state.showModal ? `
                         <div class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 modal-backdrop">
                             <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
-                                <button onclick="state.showModal = false; render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
-                                
-                                <h2 class="text-xl font-bold mb-1 text-slate-800">🌐 Link Kuis Super Pendek</h2>
-                                <p class="text-slate-500 text-xs mb-4">Link telah dipotong otomatis menjadi sangat pendek agar mudah dikirim via WhatsApp.</p>
-
-                                <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-lg">⚡</span>
-                                        <div class="text-xs">
-                                            <div class="font-bold text-blue-800">
-                                                ${state.isShortening ? '⏳ Memotong link otomatis...' : (state.shortShareUrl ? 'Link Terpotong Super Pendek (~18 Karakter)' : 'Kompresi LZ-String Aktif')}
-                                            </div>
-                                            <div class="text-blue-600">${state.shortShareUrl ? 'Siap Bagikan ke Siswa' : `Ukuran hemat ~${state.compressedRatio}%`}</div>
-                                        </div>
-                                    </div>
-                                    <span class="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                        ${state.shortShareUrl ? 'is.gd API' : 'LZ-String'}
-                                    </span>
-                                </div>
-
-                                <div class="mb-4">
-                                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Link Kuis Siswa (Siap Pakai):</label>
-                                    <input type="text" readonly value="${state.isShortening ? 'Sedang memproses link pendek...' : activeDisplayUrl}" class="w-full bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-blue-600 font-bold font-mono outline-none">
-                                </div>
-
-                                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 flex flex-col items-center text-center">
-                                    <span class="text-xs font-semibold text-slate-500 mb-2">Pindai QR Code via HP Siswa / Proyektor:</span>
-                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(activeDisplayUrl)}" 
-                                         alt="QR Code Kuis" class="w-36 h-36 rounded-lg border border-slate-300 shadow-sm bg-white p-1">
-                                </div>
-
-                                <div class="space-y-2">
-                                    <button onclick="copyLink()" ${state.isShortening ? 'disabled' : ''} class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-md flex justify-center items-center gap-2">
-                                        <span>📋</span> Salin Link Kuis Pendek
-                                    </button>
-                                </div>
+                                <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button>
+                                <h2 class="text-xl font-bold mb-1">Link Kuis Siswa</h2>
+                                <p class="text-xs text-slate-500 mb-4">Link ini sudah diperpendek dan 100% aman untuk dibagikan ke WhatsApp.</p>
+                                <input type="text" readonly value="${state.rawShareUrl}" class="w-full bg-slate-100 border rounded-xl p-3 text-xs text-blue-600 font-mono mb-4">
+                                <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">Salin Link Kuis</button>
+                                <div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 mt-2"></div>
                             </div>
                         </div>
                     ` : ''}
 
-                    <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
-                        <div class="flex items-center gap-2 text-blue-600 font-black text-xl tracking-tight">
-                            <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">25 Tipe Soal</span>
-                        </div>
+                    <header class="bg-white shadow-sm border-b px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
+                        <div class="font-black text-xl text-blue-600">✏️ EduGenerator Pro</div>
                         <div class="flex gap-3">
-                            <button onclick="generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
-                                <span>🌐</span> Bagikan Online
-                            </button>
-                            <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
-                                <span>🖨️</span> Cetak Kertas (A4)
-                            </button>
+                            <button onclick="window.generateLink()" class="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm">Bagikan Online</button>
+                            <button onclick="window.triggerPrint()" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium shadow-sm">Cetak Kertas</button>
                         </div>
                     </header>
 
                     <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6">
-                        <aside class="w-full lg:w-[410px] bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 shrink-0 h-fit no-print">
-                            
-                            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">📌 Informasi Materi Pembelajaran</h3>
+                        <aside class="w-full lg:w-[410px] bg-white rounded-2xl border p-5 flex flex-col gap-4 h-fit no-print">
+                            <div class="bg-slate-50 p-4 rounded-xl border space-y-3">
+                                <h3 class="text-xs font-bold text-slate-500 uppercase">Informasi Guru & Materi</h3>
                                 <div>
-                                    <label class="block text-xs font-medium text-slate-600 mb-1">Mata Pelajaran</label>
-                                    <input type="text" value="${state.subject}" oninput="state.subject = this.value; renderPreviewOnly();" 
-                                        class="w-full border border-slate-300 rounded-lg p-2 text-sm font-medium outline-none focus:border-blue-500 bg-white">
+                                    <label class="block text-xs font-medium mb-1">No. WhatsApp Guru</label>
+                                    <input type="text" value="${state.teacherWhatsApp}" oninput="window.appState.teacherWhatsApp = this.value" class="w-full border rounded-lg p-2 text-sm bg-white">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-medium text-slate-600 mb-1">Judul Materi / Bab</label>
-                                    <input type="text" value="${state.topic}" oninput="state.topic = this.value; renderPreviewOnly();" 
-                                        class="w-full border border-slate-300 rounded-lg p-2 text-sm font-medium outline-none focus:border-blue-500 bg-white">
+                                    <label class="block text-xs font-medium mb-1">Mata Pelajaran</label>
+                                    <input type="text" value="${state.subject}" oninput="window.appState.subject = this.value; renderPreviewOnly();" class="w-full border rounded-lg p-2 text-sm bg-white">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Judul Materi / Bab</label>
+                                    <input type="text" value="${state.topic}" oninput="window.appState.topic = this.value; renderPreviewOnly();" class="w-full border rounded-lg p-2 text-sm bg-white">
                                 </div>
                             </div>
 
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">1. Pilih Tipe Soal (25 Jenis)</label>
-                                <select onchange="setType(this.value)" class="w-full border border-slate-300 rounded-xl p-2.5 text-sm font-medium bg-slate-50 outline-none focus:border-blue-500">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Pilih Tipe Soal</label>
+                                <select onchange="window.setType(this.value)" class="w-full border rounded-xl p-2.5 text-sm bg-slate-50">
                                     ${QUESTION_TYPES.map(cat => `
                                         <optgroup label="${cat.category}">
-                                            ${cat.items.map(item => `
-                                                <option value="${item.id}" ${state.type === item.id ? 'selected' : ''}>${item.label}</option>
-                                            `).join('')}
+                                            ${cat.items.map(item => `<option value="${item.id}" ${state.type === item.id ? 'selected' : ''}>${item.label}</option>`).join('')}
                                         </optgroup>
                                     `).join('')}
                                 </select>
                             </div>
 
-                            <button onclick="generate25Auto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition text-sm flex justify-center items-center gap-2 shadow-sm">
-                                <span>⚡</span> Generate 25 Soal Otomatis (${state.topic})
+                            <button onclick="window.generate25Auto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-sm">
+                                ⚡ Generate 25 Soal Otomatis
                             </button>
 
-                            ${state.type === 'mc' ? `
-                                <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl">
-                                    <label class="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Durasi Kuis Online (Menit)</label>
-                                    <input type="number" min="1" value="${state.timeLimit}" onchange="state.timeLimit = this.value" class="w-full border border-emerald-300 rounded-lg p-2 text-center font-bold text-emerald-900 bg-white outline-none">
-                                </div>
-                            ` : ''}
-
                             <div>
-                                <div class="flex justify-between items-center mb-1.5">
-                                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Edit Isi Soal</label>
-                                    <span class="text-[11px] text-blue-600 font-semibold">${state.text.split('\n').filter(t=>t.trim()!=='').length} Soal Terdeteksi</span>
-                                </div>
-                                <textarea rows="9" oninput="updateText(this.value)" class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50">${state.text}</textarea>
-                            </div>
-
-                            <div class="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 leading-relaxed">
-                                💡 <strong>Format Tipe Ini:</strong><br>
-                                <code>${activeTypeObj ? activeTypeObj.hint : ''}</code>
+                                <label class="text-xs font-bold text-slate-500 uppercase">Edit Isi Soal</label>
+                                <textarea rows="7" oninput="window.updateText(this.value)" class="w-full border rounded-xl p-3 text-xs font-mono bg-slate-50 mt-1">${state.text}</textarea>
                             </div>
                         </aside>
 
-                        <!-- PRATINJAU KERTAS A4 (Satu-satunya area yang akan dicetak) -->
                         <section class="flex-1 bg-slate-200 rounded-2xl p-4 md:p-8 flex justify-center items-start overflow-auto">
-                            <div class="bg-white shadow-2xl a4-paper p-10 md:p-14 text-slate-900 print-area flex flex-col justify-between">
+                            <div class="bg-white shadow-2xl a4-paper p-10 text-slate-900 print-area flex flex-col justify-between">
                                 <div>
-                                    <!-- KOP KERTAS -->
                                     <div class="border-b-2 border-slate-800 pb-4 mb-6 flex justify-between items-end">
                                         <div>
-                                            <span class="text-xs font-bold text-blue-600 uppercase tracking-widest">${state.subject || 'MATA PELAJARAN'}</span>
-                                            <h2 class="text-xl font-bold uppercase tracking-wider text-slate-900 mt-0.5">${state.topic || 'LEMBAR KERJA SISWA'}</h2>
-                                            <p class="text-slate-500 text-xs mt-1">${state.instructions}</p>
+                                            <span class="text-xs font-bold text-blue-600 uppercase">${state.subject}</span>
+                                            <h2 class="text-xl font-bold uppercase mt-0.5">${state.topic}</h2>
                                         </div>
-                                        <div class="w-56 text-xs space-y-1.5 text-slate-700">
-                                            <div class="flex border-b border-slate-400 pb-0.5"><span class="w-16 font-semibold">Nama</span>:</div>
-                                            <div class="flex border-b border-slate-400 pb-1"><span class="w-16 font-semibold">Kelas</span>:</div>
-                                            <div class="flex border-b border-slate-400 pb-1"><span class="w-16 font-semibold">Nilai</span>:</div>
+                                        <div class="w-56 text-xs space-y-1.5">
+                                            <div class="flex border-b pb-0.5"><span class="w-16 font-semibold">Nama</span>:</div>
+                                            <div class="flex border-b pb-1"><span class="w-16 font-semibold">Kelas</span>:</div>
                                         </div>
                                     </div>
-
-                                    <!-- KONTEN PREVIEW SOAL -->
                                     <div id="preview-content"></div>
-                                </div>
-
-                                <div class="mt-8 pt-3 border-t border-slate-200 flex justify-between text-[11px] text-slate-400">
-                                    <span>EduGenerator Pro — ${state.subject}</span>
-                                    <span>Halaman Kertas Soal</span>
                                 </div>
                             </div>
                         </section>
                     </main>
                 </div>
             `;
-
             renderPreviewOnly();
         }
 
-        window.onload = init;
+        window.onload = () => { init(); };
     </script>
 </body>
 </html>
