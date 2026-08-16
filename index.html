@@ -416,6 +416,201 @@
                                 <div id="exam-error" class="text-xs text-red-600 font-bold"></div>
                             </div>
 
+                            <div class="bg-slate-50 border border-slate-2w.updateText = function(text) {
+            state.text = text;
+            renderPreviewOnly();
+        }
+
+        window.generateLink = function() {
+            const quizPayload = {
+                type: state.type,
+                subject: state.subject,
+                topic: state.topic,
+                text: state.text,
+                time: Number(state.timeLimit) || 15,
+                wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
+            };
+            
+            const encodedStr = btoa(encodeURIComponent(JSON.stringify(quizPayload)));
+            const shareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`;
+            
+            state.rawShareUrl = shareUrl;
+            state.showModal = true;
+            render();
+        }
+
+        window.copyLink = function() {
+            navigator.clipboard.writeText(state.rawShareUrl);
+            const msg = document.getElementById('copy-feedback');
+            if (msg) {
+                msg.innerText = '✅ Link berhasil disalin! Silakan bagikan ke WhatsApp siswa.';
+                setTimeout(() => { msg.innerText = ''; }, 4000);
+            }
+        }
+
+        window.triggerPrint = function() {
+            window.print();
+        }
+
+        window.startExam = function() {
+            if (!state.studentName.trim() || !state.studentClass.trim()) {
+                const errBox = document.getElementById('exam-error');
+                if (errBox) errBox.innerText = "Harap masukkan Nama Lengkap dan Kelas Anda terlebih dahulu!";
+                return;
+            }
+            state.mode = 'student_exam';
+            render();
+            state.timerInterval = setInterval(() => {
+                state.timeRemaining--;
+                if (state.timeRemaining <= 0) {
+                    clearInterval(state.timerInterval);
+                    window.submitExam();
+                } else {
+                    renderTimerOnly();
+                }
+            }, 1000);
+        }
+
+        window.submitExam = function() {
+            if (state.timerInterval) clearInterval(state.timerInterval);
+            const lines = state.studentQuiz.text.split('\n').filter(l => l.trim() !== '' && !l.startsWith('---'));
+            let correct = 0;
+            let totalEvaluated = 0;
+
+            lines.forEach((line, idx) => {
+                const parts = line.split('|').map(p => p.trim());
+                if (parts.length >= 6) {
+                    totalEvaluated++;
+                    const key = parts[5] ? parts[5].toUpperCase() : '';
+                    if (state.studentAnswers[idx] === key) correct++;
+                }
+            });
+
+            const total = totalEvaluated > 0 ? totalEvaluated : lines.length;
+            const score = total > 0 ? Math.round((correct / total) * 100) : 100;
+            state.scoreResult = { correct, total, score };
+            state.mode = 'result';
+            render();
+        }
+
+        window.sendScoreToWhatsApp = function() {
+            const waNumber = state.studentQuiz.wa;
+            const msg = `Halo Bapak/Ibu Guru, saya telah menyelesaikan kuis:\n\n👤 Nama: ${state.studentName}\n🏫 Kelas: ${state.studentClass}\n📚 Mapel: ${state.studentQuiz.subject}\n📌 Topik: ${state.studentQuiz.topic}\n🏆 Nilai Akhir: *${state.scoreResult.score}* (Benar ${state.scoreResult.correct} dari ${state.scoreResult.total} soal)\n\nTerima kasih!`;
+            
+            const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+            window.open(waUrl, '_blank');
+        }
+
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function renderTimerOnly() {
+            const timerEl = document.getElementById('timer-display');
+            if (timerEl) {
+                timerEl.innerText = formatTime(state.timeRemaining);
+                if (state.timeRemaining < 60) {
+                    timerEl.className = "font-mono text-xl font-bold px-4 py-1 rounded-full bg-red-100 text-red-600 animate-pulse";
+                }
+            }
+        }
+
+        function renderPreviewOnly() {
+            const previewContainer = document.getElementById('preview-content');
+            if (!previewContainer) return;
+
+            const lines = state.text.split('\n').filter(t => t.trim() !== '');
+            const labels = ['A', 'B', 'C', 'D'];
+
+            let html = '';
+
+            if (state.type === 'reading') {
+                const parts = state.text.split('---');
+                const passage = parts[0] ? parts[0].trim() : '';
+                const qLines = parts[1] ? parts[1].trim().split('\n').filter(l => l.trim() !== '') : [];
+
+                html += `
+                    <div class="p-4 bg-slate-50 border border-slate-300 rounded-xl mb-6 text-sm text-justify leading-relaxed page-break-inside-avoid">
+                        ${passage.replace(/\n/g, '<br>')}
+                    </div>
+                    <h4 class="font-bold text-slate-800 mb-4 border-b pb-2">Soal Pertanyaan:</h4>
+                `;
+
+                qLines.forEach((q, idx) => {
+                    html += `<div class="mb-4 text-sm flex gap-2 page-break-inside-avoid">
+                        <span class="font-bold">${idx + 1}.</span>
+                        <div class="flex-1">${q}</div>
+                    </div>`;
+                });
+            } else {
+                lines.forEach((line, idx) => {
+                    const parts = line.split('|').map(p => p.trim());
+                    
+                    if (state.type === 'mc' && parts.length >= 5) {
+                        html += `
+                            <div class="mb-4 text-sm page-break-inside-avoid">
+                                <div class="flex gap-2 font-medium mb-1">
+                                    <span>${idx + 1}.</span>
+                                    <span class="flex-1">${parts[0]}</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-y-1.5 ml-5 text-xs text-slate-700">
+                                    ${parts.slice(1, 5).map((opt, oIdx) => `
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] font-bold shrink-0">${labels[oIdx]}</span>
+                                            <span>${opt}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else if (state.type === 'matching' && line.includes('-')) {
+                        const mParts = line.split('-').map(p => p.trim());
+                        html += `
+                            <div class="flex justify-between items-center mb-2 text-sm border-b border-dashed border-slate-200 pb-1 page-break-inside-avoid">
+                                <span class="w-1/2">${idx + 1}. ${mParts[0] || line}</span>
+                                <span class="text-slate-400 font-mono">-------------------------</span>
+                                <span class="w-1/3 text-right font-medium">${mParts[1] || '[ Pasangan ]'}</span>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div class="mb-3 text-sm flex gap-2 page-break-inside-avoid">
+                                <span class="font-bold shrink-0">${idx + 1}.</span>
+                                <span class="flex-1">${line.split('|')[0]}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            previewContainer.innerHTML = html;
+        }
+
+        window.render = function() {
+            const app = document.getElementById('app');
+
+            if (state.mode === 'student_start') {
+                app.innerHTML = `
+                    <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+                        <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+                            <div class="text-5xl mb-3">📝</div>
+                            <h1 class="text-2xl font-bold mb-1 text-slate-800">${state.studentQuiz.subject || 'Ujian Online'}</h1>
+                            <p class="text-blue-600 font-medium text-sm mb-4">${state.studentQuiz.topic || 'Lembar Kerja Siswa'}</p>
+                            
+                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm mb-4 text-left space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Nama Lengkap Siswa:</label>
+                                    <input type="text" id="input-student-name" value="${state.studentName}" oninput="window.appState.studentName = this.value" placeholder="Contoh: Budi Santoso" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white outline-none focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">Kelas:</label>
+                                    <input type="text" id="input-student-class" value="${state.studentClass}" oninput="window.appState.studentClass = this.value" placeholder="Contoh: 8A / 9B" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white outline-none focus:border-blue-500">
+                                </div>
+                                <div id="exam-error" class="text-xs text-red-600 font-bold"></div>
+                            </div>
+
                             <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs mb-6 text-left space-y-1 text-slate-600">
                                 <div>⏱️ <strong>Durasi Waktu:</strong> ${state.studentQuiz.time} Menit</div>
                                 <div>📊 <strong>Jumlah Soal:</strong> ${state.studentQuiz.text.split('\n').filter(t=>t.trim()!=='').length} Pertanyaan</div>
