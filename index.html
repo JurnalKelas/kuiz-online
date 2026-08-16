@@ -5,13 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Tambahan Library Kompresi untuk Memendekkan Link -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
-        .a4-paper {
-            width: 210mm;
-            min-height: 297mm;
-        }
+        .a4-paper { width: 210mm; min-height: 297mm; }
         @media print {
             @page { size: A4 portrait; margin: 10mm; }
             html, body, #app, main, section {
@@ -140,14 +135,14 @@
             let decodedObj = null;
             if (targetQ) {
                 try {
-                    // Dekompresi data link agar aman dan tidak terpotong
-                    const decompressed = LZString.decompressFromEncodedURIComponent(targetQ);
-                    if (!decompressed) throw new Error("Data terpotong");
-                    decodedObj = JSON.parse(decompressed);
+                    // DEKODE AMAN: Memperbaiki spasi yang berubah kembali menjadi + dan mengembalikan padding Base64
+                    let base64 = targetQ.replace(/-/g, '+').replace(/_/g, '/').replace(/ /g, '+');
+                    while (base64.length % 4) { base64 += '='; }
+                    const jsonStr = decodeURIComponent(atob(base64));
+                    decodedObj = JSON.parse(jsonStr);
                 } catch (e) {
                     console.error("Gagal dekode:", e);
-                    alert("⚠️ Maaf, link kuis ini tidak valid atau terpotong saat dibagikan. Silakan minta guru Anda mengirim ulang link yang lengkap.");
-                    // Kembalikan ke halaman utama jika link rusak
+                    alert("⚠️ Maaf, link kuis ini tidak valid atau formatnya rusak. Anda akan dikembalikan ke halaman utama.");
                     window.location.href = window.location.origin + window.location.pathname;
                     return;
                 }
@@ -185,11 +180,13 @@
                 wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
-            // Kompresi tingkat tinggi agar URL pendek dan kebal pemotongan WhatsApp
-            const compressedStr = LZString.compressToEncodedURIComponent(JSON.stringify(quizPayload));
+            // ENKODE AMAN: Mengubah base64 biasa ke format khusus URL (tanpa + / dan =)
+            const jsonStr = JSON.stringify(quizPayload);
+            const base64 = btoa(encodeURIComponent(jsonStr));
+            const safeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
             
             let baseUrl = window.location.origin + window.location.pathname;
-            state.rawShareUrl = `${baseUrl}?q=${compressedStr}`;
+            state.rawShareUrl = `${baseUrl}?q=${safeBase64}`;
             state.showModal = true;
             render();
         };
@@ -405,7 +402,7 @@
                             <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
                                 <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button>
                                 <h2 class="text-xl font-bold mb-1">Link Kuis Siswa</h2>
-                                <p class="text-xs text-slate-500 mb-4">Link sekarang sudah dikompresi (sangat pendek dan dijamin bisa dibuka)!</p>
+                                <p class="text-xs text-slate-500 mb-4">Link aman, anti-potong, dan bebas dari library eksternal.</p>
                                 <input type="text" readonly value="${state.rawShareUrl}" class="w-full bg-slate-100 border rounded-xl p-3 text-xs text-blue-600 font-mono mb-4">
                                 <button onclick="window.copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md">Salin Link Kuis</button>
                                 <div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 mt-2"></div>
