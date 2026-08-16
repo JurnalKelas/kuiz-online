@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EduGenerator Pro - Ujian Online & Lembar Kerja</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- LZ-String untuk kompatibilitas link kompresi -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         .a4-paper {
@@ -55,37 +54,7 @@
 
     <div id="app"></div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'edu-generator-pro-default';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-
-        let app, db, auth, currentUser = null;
-        try {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            
-            const initAuth = async () => {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                    currentUser = auth.currentUser;
-                } catch (e) {
-                    console.error("Auth error:", e);
-                }
-            };
-            initAuth();
-        } catch (e) {
-            console.log("Firebase initialized in offline mode.");
-        }
-
+    <script>
         const QUESTION_TYPES = [
             {
                 category: "Pilihan & Logika",
@@ -241,17 +210,16 @@
             instructions: 'Jawablah pertanyaan-pertanyaan di bawah ini dengan teliti dan benar!',
             text: '',
             timeLimit: 15,
+            teacherWhatsApp: '628123456789', // Default contoh nomor WA guru
             rawShareUrl: '',
             showModal: false,
-            showResultsModal: false,
             studentQuiz: null,
             studentName: '',
             studentClass: '',
             studentAnswers: {},
             timeRemaining: 0,
             timerInterval: null,
-            scoreResult: null,
-            submissions: []
+            scoreResult: null
         };
 
         window.appState = state;
@@ -261,7 +229,6 @@
 
             const params = new URLSearchParams(window.location.search);
             const rawQ = params.get('q');
-            const rawZ = params.get('z');
             
             let decodedObj = null;
 
@@ -272,46 +239,12 @@
                 } catch (e) {
                     console.error("Gagal dekode q:", e);
                 }
-            } else if (rawZ) {
-                try {
-                    const decompressed = LZString.decompressFromEncodedURIComponent(rawZ);
-                    if (decompressed) {
-                        const raw = JSON.parse(decompressed);
-                        decodedObj = {
-                            type: raw.t,
-                            subject: raw.s,
-                            topic: raw.tp,
-                            text: raw.tx,
-                            time: raw.tm
-                        };
-                    }
-                } catch (e) {
-                    console.error("Gagal dekode z:", e);
-                }
             }
 
             if (decodedObj) {
                 state.studentQuiz = decodedObj;
                 state.timeRemaining = (decodedObj.time || 15) * 60;
                 state.mode = 'student_start';
-            }
-
-            if (db) {
-                try {
-                    const qCol = collection(db, 'artifacts', appId, 'public', 'data', 'quiz_submissions');
-                    onSnapshot(qCol, (snapshot) => {
-                        const list = [];
-                        snapshot.forEach(docSnap => {
-                            list.push({ id: docSnap.id, ...docSnap.data() });
-                        });
-                        state.submissions = list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                        if (state.showResultsModal) render();
-                    }, (err) => {
-                        console.log("Snapshot notice:", err);
-                    });
-                } catch (e) {
-                    console.log("Firestore not available.");
-                }
             }
             
             render();
@@ -339,7 +272,8 @@
                 subject: state.subject,
                 topic: state.topic,
                 text: state.text,
-                time: Number(state.timeLimit) || 15
+                time: Number(state.timeLimit) || 15,
+                wa: state.teacherWhatsApp.replace(/[^0-9]/g, '')
             };
             
             const encodedStr = btoa(encodeURIComponent(JSON.stringify(quizPayload)));
@@ -382,7 +316,7 @@
             }, 1000);
         }
 
-        window.submitExam = async function() {
+        window.submitExam = function() {
             if (state.timerInterval) clearInterval(state.timerInterval);
             const lines = state.studentQuiz.text.split('\n').filter(l => l.trim() !== '' && !l.startsWith('---'));
             let correct = 0;
@@ -401,25 +335,15 @@
             const score = total > 0 ? Math.round((correct / total) * 100) : 100;
             state.scoreResult = { correct, total, score };
             state.mode = 'result';
-
-            if (db) {
-                try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'quiz_submissions'), {
-                        name: state.studentName,
-                        className: state.studentClass,
-                        subject: state.studentQuiz.subject || 'Ujian',
-                        topic: state.studentQuiz.topic || 'Kuis',
-                        score: score,
-                        correct: correct,
-                        total: total,
-                        timestamp: Date.now()
-                    });
-                } catch (e) {
-                    console.error("Gagal menyimpan rekap nilai:", e);
-                }
-            }
-
             render();
+        }
+
+        window.sendScoreToWhatsApp = function() {
+            const waNumber = state.studentQuiz.wa;
+            const msg = `Halo Bapak/Ibu Guru, saya telah menyelesaikan kuis:\n\n👤 Nama: ${state.studentName}\n🏫 Kelas: ${state.studentClass}\n📚 Mapel: ${state.studentQuiz.subject}\n📌 Topik: ${state.studentQuiz.topic}\n🏆 Nilai Akhir: *${state.scoreResult.score}* (Benar ${state.scoreResult.correct} dari ${state.scoreResult.total} soal)\n\nTerima kasih!`;
+            
+            const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+            window.open(waUrl, '_blank');
         }
 
         function formatTime(sec) {
@@ -626,12 +550,20 @@
                             <div class="text-6xl mb-4">🏆</div>
                             <h1 class="text-3xl font-bold text-slate-800 mb-1">Ujian Selesai!</h1>
                             <p class="text-slate-500 text-sm mb-2">Terima kasih, <strong>${state.studentName}</strong> (${state.studentClass})</p>
-                            <p class="text-emerald-600 font-semibold text-xs mb-6">✅ Nilai Anda telah tercatat otomatis di sistem guru.</p>
+                            
                             <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-6">
                                 <div class="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Nilai Akhir</div>
                                 <div class="text-6xl font-black text-blue-600 mb-2">${state.scoreResult.score}</div>
                                 <div class="text-slate-600 text-sm">Benar <strong>${state.scoreResult.correct}</strong> dari <strong>${state.scoreResult.total}</strong> soal</div>
                             </div>
+
+                            ${state.studentQuiz.wa ? `
+                                <button onclick="window.sendScoreToWhatsApp()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg text-sm flex items-center justify-center gap-2 mb-3">
+                                    <span>📲</span> Kirim Nilai ke WhatsApp Guru
+                                </button>
+                            ` : ''}
+                            
+                            <p class="text-xs text-slate-400">Silakan klik tombol di atas agar nilai Anda tercatat di WhatsApp Guru.</p>
                         </div>
                     </div>
                 `;
@@ -648,7 +580,7 @@
                                 <button onclick="window.appState.showModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
                                 
                                 <h2 class="text-xl font-bold mb-1 text-slate-800">🌐 Link Kuis Online Siswa</h2>
-                                <p class="text-slate-500 text-xs mb-4">Salin link di bawah ini dan bagikan ke WhatsApp siswa. Siswa yang membuka link ini langsung masuk ke halaman ujian tanpa menu guru.</p>
+                                <p class="text-slate-500 text-xs mb-4">Salin link di bawah ini dan bagikan ke WhatsApp siswa.</p>
 
                                 <div class="mb-4">
                                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Link Kuis Siswa:</label>
@@ -665,52 +597,11 @@
                         </div>
                     ` : ''}
 
-                    ${state.showResultsModal ? `
-                        <div class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 modal-backdrop">
-                            <div class="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl relative max-h-[85vh] flex flex-col">
-                                <button onclick="window.appState.showResultsModal = false; window.render();" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
-                                
-                                <h2 class="text-xl font-bold mb-1 text-slate-800">📊 Rekap Nilai Siswa (Live Cloud)</h2>
-                                <p class="text-slate-500 text-xs mb-4">Daftar siswa yang telah menyelesaikan kuis secara online:</p>
-
-                                <div class="flex-1 overflow-auto border border-slate-200 rounded-xl">
-                                    <table class="w-full text-left text-xs">
-                                        <thead class="bg-slate-100 text-slate-700 uppercase sticky top-0">
-                                            <tr>
-                                                <th class="p-3">Waktu</th>
-                                                <th class="p-3">Nama Siswa</th>
-                                                <th class="p-3">Kelas</th>
-                                                <th class="p-3 text-center">Skor</th>
-                                                <th class="p-3 text-center">Benar / Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-200">
-                                            ${state.submissions.length === 0 ? `
-                                                <tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada siswa yang mengumpulkan jawaban.</td></tr>
-                                            ` : state.submissions.map(sub => `
-                                                <tr class="hover:bg-slate-50">
-                                                    <td class="p-3 text-slate-500">${new Date(sub.timestamp).toLocaleTimeString()}</td>
-                                                    <td class="p-3 font-bold text-slate-800">${sub.name}</td>
-                                                    <td class="p-3">${sub.className}</td>
-                                                    <td class="p-3 text-center font-black text-blue-600 text-sm">${sub.score}</td>
-                                                    <td class="p-3 text-center">${sub.correct} / ${sub.total}</td>
-                                                </tr>
-                                            `).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
-
                     <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-3.5 flex justify-between items-center no-print sticky top-0 z-10">
                         <div class="flex items-center gap-2 text-blue-600 font-black text-xl tracking-tight">
                             <span>✏️</span> EduGenerator Pro <span class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">25 Tipe Soal</span>
                         </div>
                         <div class="flex gap-3">
-                            <button onclick="window.appState.showResultsModal = true; window.render();" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
-                                <span>📊</span> Rekap Nilai Siswa (${state.submissions.length})
-                            </button>
                             <button onclick="window.generateLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium transition flex items-center gap-2 shadow-sm text-sm">
                                 <span>🌐</span> Bagikan Online
                             </button>
@@ -724,7 +615,12 @@
                         <aside class="w-full lg:w-[410px] bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 shrink-0 h-fit no-print">
                             
                             <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">📌 Informasi Materi Pembelajaran</h3>
+                                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">📌 Informasi Guru & Materi</h3>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Nomor WhatsApp Guru (Contoh: 62812...)</label>
+                                    <input type="text" value="${state.teacherWhatsApp}" oninput="window.appState.teacherWhatsApp = this.value" 
+                                        class="w-full border border-slate-300 rounded-lg p-2 text-sm font-medium outline-none focus:border-blue-500 bg-white" placeholder="628xxxxxxxxxx">
+                                </div>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 mb-1">Mata Pelajaran</label>
                                     <input type="text" value="${state.subject}" oninput="window.appState.subject = this.value; renderPreviewOnly();" 
@@ -766,7 +662,7 @@
                                     <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Edit Isi Soal</label>
                                     <span class="text-[11px] text-blue-600 font-semibold">${state.text.split('\n').filter(t=>t.trim()!=='').length} Soal Terdeteksi</span>
                                 </div>
-                                <textarea rows="9" oninput="window.updateText(this.value)" class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50">${state.text}</textarea>
+                                <textarea rows="7" oninput="window.updateText(this.value)" class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-slate-50">${state.text}</textarea>
                             </div>
 
                             <div class="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 leading-relaxed">
