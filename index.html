@@ -1,40 +1,250 @@
-<!-- Chosen Palette: Slate & Blue Clean Educational Palette -->
-<!-- Application Structure Plan: Single Page Application (SPA) Worksheet & Quiz Generator with:
-  1. Material/Topic Header Controls (Mata Pelajaran, Judul Materi, Petunjuk Pengerjaan).
-  2. 25 Comprehensive Question Types categorized into Option & Logic, Fill-in, Matching & Ordering, Text & Dialogue, Grammar & Vocab, and Special Media.
-  3. One-click "⚡ Generate 25 Soal Otomatis" feature to instantly populate 25 questions for any selected question type.
-  4. Live A4 Paper Worksheet Preview fixed for high-quality, full-page printing without missing elements.
-  5. Student Online Exam Mode with countdown timer, auto-grading, and score breakdown.
-  6. Ultra-Short Link Engine: Integrated JSONP Shortener API (is.gd / v.gd) converting thousands of compressed characters into an ultra-short link (~18 characters) plus QR Code Generator.
-  7. Zero external graphical dependencies except Tailwind CSS CDN and LZString script. -->
-<!-- Visualization & Content Choices: Clean HTML DOM components for A4 print layout and interactive exam screens. Styled metrics for online quiz score cards. Dynamic QR Code integration via QRServer API. Unicode emojis for UI icons. NO SVG graphics used. NO Mermaid JS used. -->
-<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGenerator Pro - Pembuat Soal & Lembar Kerja (25 Tipe Soal)</title>
+    <title>EduGenerator Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- LZ-String Library untuk kompresi data URL -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
-        .a4-paper {
-            width: 210mm;
-            min-height: 297mm;
+        .a4-paper { width: 210mm; min-height: 297mm; }
+        @media print {
+            @page { size: A4 portrait; margin: 10mm; }
+            html, body, #app, main, section { background: white !important; color: black !important; width: 100% !important; height: auto !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; display: block !important; box-shadow: none !important; }
+            .no-print, header, aside, .modal-backdrop, button { display: none !important; }
+            .print-area { box-shadow: none !important; margin: 0 !important; width: 100% !important; padding: 0 !important; border: none !important; display: block !important; }
+            .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans">
+
+    <div id="app"></div>
+
+    <script>
+        // --- 1. PENGATURAN DATA AWAL ---
+        let savedKey = ''; 
+        try { savedKey = localStorage.getItem('gemini_api_key') || ''; } catch(e) {}
+
+        window.state = {
+            mode: 'teacher', 
+            type: 'mc', 
+            subject: 'Bahasa Indonesia', 
+            topic: 'Pemahaman Teks',
+            text: 'Teks soal akan muncul di sini...\n\nSilakan klik tombol Kuning atau Ungu di sebelah kiri.',
+            timeLimit: 15, 
+            teacherWhatsApp: '628123456789', 
+            apiKey: savedKey, 
+            rawShareUrl: '', 
+            showModal: false, 
+            showApiModal: false, 
+            studentQuiz: null, 
+            studentName: '', 
+            studentClass: '', 
+            studentAnswers: {}, 
+            timeRemaining: 0, 
+            timerInterval: null, 
+            scoreResult: null
+        };
+
+        // --- 2. FUNGSI TOMBOL KUNING (TANPA AI) ---
+        function generateOffline() {
+            let lines = [];
+            for (let i = 1; i <= 25; i++) {
+                if (window.state.type === 'mc') { 
+                    lines.push(`Pertanyaan ${i} mengenai konsep dasar ${window.state.topic} pada pelajaran ${window.state.subject}? | Pilihan A | Pilihan B | Pilihan C | Pilihan D | A`); 
+                } else if (window.state.type === 'tf') { 
+                    lines.push(`Pernyataan ${i} terkait materi ${window.state.topic} bernilai benar atau salah.`); 
+                } else { 
+                    lines.push(`Jelaskan secara singkat mengenai poin ke-${i} dari materi ${window.state.topic}?`); 
+                }
+            }
+            window.state.text = lines.join('\n');
+            renderApp();
         }
 
-        @media print {
-            @page {
-                size: A4 portrait;
-                margin: 12mm 15mm 12mm 15mm;
+        // --- 3. FUNGSI TOMBOL UNGU (DENGAN AI) ---
+        async function generateWithAI() {
+            if (!window.state.apiKey || window.state.apiKey.trim() === '') {
+                window.state.showApiModal = true; 
+                renderApp(); 
+                return;
             }
-            body { 
-                background: white !important; 
-                font-size: 11pt; 
-                color: black !important; 
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+            
+            window.state.text = "⏳ Menghubungkan ke Gemini AI...\nMohon tunggu 5-10 detik..."; 
+            renderApp();
+            
+            const prompt = `Buatkan 25 soal ujian untuk pelajaran "${window.state.subject}" materi "${window.state.topic}". Tipe soal: ${window.state.type}. Jika tipe 'mc', format WAJIB: Pertanyaan | Opsi A | Opsi B | Opsi C | Opsi D | Kunci(A/B/C/D). Tanpa nomor urut di awal baris. Hanya berikan teks soal.`;
+            const models = ['gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
+            let success = false; 
+            let errorMsg = "";
+
+            for (const model of models) {
+                if (success) break;
+                try {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${window.state.apiKey}`, {
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        window.state.text = data.candidates[0].content.parts[0].text.replace(/```/g, '').trim();
+                        success = true;
+                    } else {
+                        const err = await res.json(); 
+                        errorMsg = err.error?.message || "Model error";
+                    }
+                } catch (e) { 
+                    errorMsg = e.message; 
+                }
+            }
+            
+            if (!success) {
+                window.state.text = "❌ AI GAGAL TERHUBUNG.\nPenyebab: " + errorMsg + "\n\nSaran: \n1. Cek kembali API Key Anda.\n2. Klik tombol kuning 'Generate Tanpa AI' di kiri agar Anda tetap bisa lanjut membuat soal sekarang juga!";
+                alert("Gagal memuat AI. Silakan gunakan tombol Kuning (Generate Tanpa AI).");
+            }
+            renderApp();
+        }
+
+        // --- 4. FUNGSI PENDUKUNG ---
+        function saveApi() {
+            const inputKey = document.getElementById('modal-api-key').value.trim();
+            if (!inputKey) { alert("API Key kosong!"); return; }
+            window.state.apiKey = inputKey;
+            try { localStorage.setItem('gemini_api_key', inputKey); } catch(e){}
+            window.state.showApiModal = false; 
+            generateWithAI();
+        }
+
+        function setType(val) { window.state.type = val; renderApp(); }
+        function updateText(val) { window.state.text = val; renderPreviewOnly(); }
+        function triggerPrint() { window.print(); }
+
+        // --- 5. FUNGSI LINK DAN UJIAN SISWA ---
+        async function generateLink() {
+            const payload = { t: window.state.type, s: window.state.subject, tp: window.state.topic, tm: Number(window.state.timeLimit) || 15, w: window.state.teacherWhatsApp.replace(/[^0-9]/g, ''), x: window.state.text };
+            const jsonStr = JSON.stringify(payload); 
+            let encodedStr = '';
+            try {
+                const buffer = await new Response(new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+                encodedStr = 'C' + btoa(String.fromCharCode.apply(null, new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            } catch (e) {
+                encodedStr = 'U' + btoa(String.fromCharCode.apply(null, new TextEncoder().encode(jsonStr))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+            window.state.rawShareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`; 
+            window.state.showModal = true; 
+            renderApp();
+        }
+
+        function copyLink() {
+            const i = document.createElement('textarea'); i.value = window.state.rawShareUrl; document.body.appendChild(i); i.select();
+            try { document.execCommand('copy'); document.getElementById('copy-feedback').innerText = '✅ Tersalin!'; } catch (err) {} 
+            document.body.removeChild(i);
+        }
+
+        function startExam() {
+            if (!window.state.studentName.trim() || !window.state.studentClass.trim()) { document.getElementById('exam-error').innerText = "Isi Nama dan Kelas!"; return; }
+            window.state.mode = 'student_exam'; renderApp();
+            window.state.timerInterval = setInterval(() => {
+                window.state.timeRemaining--;
+                if (window.state.timeRemaining <= 0) { 
+                    clearInterval(window.state.timerInterval); submitExam(); 
+                } else { 
+                    const el = document.getElementById('timer-display'); 
+                    if (el) el.innerText = `${Math.floor(window.state.timeRemaining/60)}:${(window.state.timeRemaining%60).toString().padStart(2,'0')}`; 
+                }
+            }, 1000);
+        }
+
+        function submitExam() {
+            if (window.state.timerInterval) clearInterval(window.state.timerInterval);
+            let correct = 0, total = 0;
+            window.state.studentQuiz.text.split('\n').filter(l => l.trim() !== '').forEach((line, idx) => {
+                const parts = line.split('|').map(p => p.trim());
+                if (parts.length >= 6) { total++; if (window.state.studentAnswers[idx] === parts[5].toUpperCase()) correct++; }
+            });
+            total = total > 0 ? total : 1; 
+            window.state.scoreResult = { correct, total, score: Math.round((correct / total) * 100) }; 
+            window.state.mode = 'result'; 
+            renderApp();
+        }
+
+        function sendWA() {
+            const msg = `Halo Guru, saya telah menyelesaikan kuis:\n👤 Nama: ${window.state.studentName}\n🏫 Kelas: ${window.state.studentClass}\n📚 Mapel: ${window.state.studentQuiz.subject}\n🏆 Nilai: *${window.state.scoreResult.score}*`;
+            window.open(`[https://wa.me/$](https://wa.me/$){window.state.studentQuiz.wa}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        // --- 6. RENDER TAMPILAN ---
+        function renderPreviewOnly() {
+            const c = document.getElementById('preview-content'); if (!c) return;
+            const labels = ['A', 'B', 'C', 'D']; let html = '';
+            window.state.text.split('\n').filter(t => t.trim() !== '').forEach((line, idx) => {
+                const p = line.split('|').map(x => x.trim());
+                if (window.state.type === 'mc' && p.length >= 5) {
+                    html += `<div class="mb-4 text-sm page-break-inside-avoid"><div class="flex gap-2 font-medium mb-1"><span>${idx+1}.</span><span class="flex-1">${p[0]}</span></div><div class="grid grid-cols-2 gap-y-1.5 ml-5 text-xs">${p.slice(1,5).map((opt, oIdx) => `<div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] font-bold">${labels[oIdx]}</span><span>${opt}</span></div>`).join('')}</div></div>`;
+                } else { html += `<div class="mb-3 text-sm flex gap-2 page-break-inside-avoid"><span class="font-bold">${idx+1}.</span><span class="flex-1">${p[0]}</span></div>`; }
+            });
+            c.innerHTML = html;
+        }
+
+        function renderApp() {
+            const app = document.getElementById('app');
+            
+            if (window.state.mode === 'student_start') {
+                app.innerHTML = `<div class="min-h-screen bg-slate-100 flex items-center justify-center p-4"><div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center"><div class="text-5xl mb-3">📝</div><h1 class="text-2xl font-bold mb-1">${window.state.studentQuiz.subject}</h1><p class="text-blue-600 font-medium mb-4">${window.state.studentQuiz.topic}</p><div class="bg-slate-50 border p-4 rounded-xl text-sm mb-4 text-left space-y-3"><div><label class="block font-bold mb-1">Nama Lengkap:</label><input type="text" value="${window.state.studentName}" oninput="window.state.studentName = this.value" class="w-full border rounded-lg p-2.5"></div><div><label class="block font-bold mb-1">Kelas:</label><input type="text" value="${window.state.studentClass}" oninput="window.state.studentClass = this.value" class="w-full border rounded-lg p-2.5"></div><div id="exam-error" class="text-xs text-red-600 font-bold"></div></div><button onclick="startExam()" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl">Mulai Ujian</button></div></div>`; return;
+            }
+            if (window.state.mode === 'student_exam') {
+                const labels = ['A', 'B', 'C', 'D'];
+                app.innerHTML = `<div class="min-h-screen bg-slate-50 pb-20"><div class="sticky top-0 bg-white shadow-sm border-b p-4 flex justify-between z-50"><h1 class="font-bold">${window.state.studentQuiz.subject}</h1><div id="timer-display" class="font-mono font-bold bg-slate-100 px-4 py-1 rounded-full">0:00</div></div><div class="max-w-3xl mx-auto p-4 mt-6">${window.state.studentQuiz.text.split('\n').filter(t => t.trim() !== '').map((line, idx) => { const p = line.split('|').map(x => x.trim()); const isMC = p.length >= 5; return `<div class="bg-white p-6 rounded-xl shadow-sm mb-6 border"><h3 class="font-medium mb-4"><span class="mr-2 font-bold">${idx+1}.</span> ${p[0]}</h3>${isMC ? `<div class="flex flex-col gap-2.5 ml-2">${p.slice(1,5).map((opt, oIdx) => `<label class="flex items-center gap-3 p-3 rounded-xl border cursor-pointer"><input type="radio" name="q-${idx}" value="${labels[oIdx]}" onchange="window.state.studentAnswers[${idx}] = '${labels[oIdx]}'; renderApp();"><span class="text-sm">${labels[oIdx]}. ${opt}</span></label>`).join('')}</div>` : `<textarea rows="3" oninput="window.state.studentAnswers[${idx}] = this.value" class="w-full border rounded-xl p-3"></textarea>`}</div>`; }).join('')}<button onclick="submitExam()" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold">Selesai & Kumpulkan</button></div></div>`; return;
+            }
+            if (window.state.mode === 'result') {
+                app.innerHTML = `<div class="min-h-screen bg-slate-100 flex items-center justify-center p-4"><div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center"><div class="text-6xl mb-4">🏆</div><h1 class="text-3xl font-bold mb-1">Selesai!</h1><div class="bg-slate-50 border rounded-2xl p-6 mb-6"><div class="text-6xl font-black text-blue-600 mb-2">${window.state.scoreResult.score}</div><div>Benar ${window.state.scoreResult.correct} dari ${window.state.scoreResult.total}</div></div><button onclick="sendWA()" class="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-xl">Kirim Nilai ke Guru</button></div></div>`; return;
+            }
+
+            // TAMPILAN GURU
+            app.innerHTML = `
+                <div class="min-h-screen flex flex-col relative">
+                    ${window.state.showApiModal ? `<div class="fixed inset-0 bg-slate-900/80 z-[60] flex justify-center items-center p-4"><div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative text-center border-4 border-purple-500"><button onclick="window.state.showApiModal=false; renderApp();" class="absolute top-4 right-5 text-slate-400 font-bold text-xl">✕</button><div class="text-6xl mb-4">🤖</div><h2 class="text-2xl font-black mb-2">API Key Gemini</h2><div class="text-left mb-6"><input type="password" id="modal-api-key" placeholder="Paste API Key di sini..." class="w-full border-2 border-purple-300 rounded-xl p-3.5 outline-none" value="${window.state.apiKey}"></div><button onclick="saveApi();" class="w-full bg-purple-600 text-white font-bold py-3.5 rounded-xl">Simpan & Buat</button></div></div>` : ''}
+                    ${window.state.showModal ? `<div class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4"><div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative"><button onclick="window.state.showModal=false; renderApp();" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button><h2 class="text-xl font-bold mb-1">Link Kuis</h2><input type="text" readonly value="${window.state.rawShareUrl}" class="w-full bg-slate-100 border rounded-xl p-3 text-xs font-mono mb-4"><button onclick="copyLink()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl w-full">Salin Link</button><div id="copy-feedback" class="text-center text-xs font-bold text-emerald-600 mt-2"></div></div></div>` : ''}
+
+                    <header class="bg-white shadow-sm border-b px-6 py-3.5 flex justify-between items-center no-print">
+                        <div class="font-black text-xl text-blue-600">✏️ EduGenerator Pro</div>
+                        <div class="flex gap-3"><button onclick="generateLink()" class="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium">Bagikan Online</button><button onclick="triggerPrint()" class="bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium">Cetak Kertas</button></div>
+                    </header>
+
+                    <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6">
+                        <aside class="w-full lg:w-[410px] bg-white rounded-2xl border p-5 flex flex-col gap-4 h-fit no-print">
+                            <div class="bg-slate-50 p-4 rounded-xl border space-y-3">
+                                <div><label class="block text-xs font-medium mb-1">No. WA Guru</label><input type="text" value="${window.state.teacherWhatsApp}" oninput="window.state.teacherWhatsApp = this.value" class="w-full border rounded-lg p-2 text-sm"></div>
+                                <div><label class="block text-xs font-medium mb-1">Mapel</label><input type="text" value="${window.state.subject}" oninput="window.state.subject=this.value; renderPreviewOnly();" class="w-full border rounded-lg p-2 text-sm"></div>
+                                <div><label class="block text-xs font-medium mb-1">Materi</label><input type="text" value="${window.state.topic}" oninput="window.state.topic=this.value; renderPreviewOnly();" class="w-full border rounded-lg p-2 text-sm"></div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-bold mb-1.5">Pilih Tipe</label>
+                                <select onchange="setType(this.value)" class="w-full border rounded-xl p-2.5 text-sm">
+                                    <option value="mc" ${window.state.type === 'mc' ? 'selected' : ''}>1. Pilihan Ganda (A/B/C/D)</option>
+                                    <option value="tf" ${window.state.type === 'tf' ? 'selected' : ''}>2. Benar atau Salah (True / False)</option>
+                                    <option value="essay" ${window.state.type === 'essay' ? 'selected' : ''}>3. Uraian / Essay</option>
+                                </select>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <button onclick="generateWithAI()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl text-xs flex flex-col items-center justify-center gap-1 shadow-sm">
+                                    <span class="text-xl">🤖</span> Generate dg AI
+                                </button>
+                                <button onclick="generateOffline()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl text-xs flex flex-col items-center justify-center gap-1 shadow-sm">
+                                    <span class="text-xl">⚡</span> Generate Tanpa AI
+                                </button>
+                            </div>
+
+                            <div><label class="text-xs font-bold">Isi Soal</label><textarea rows="7" oninput="updateText(this.value)" class="w-full border rounded-xl p-3 text-xs font-mono mt-1">${window.state.text}</textarea></div>
+                        </aside>
+                        <section class="flex-1 bg-slate-200 rounded-2xl p-4 md:p-8 flex justify-center items-start overflow-auto"><div class="bg-white shadow-2xl a4-paper p-10 print-area flex flex-col justify-between"><div><div class="border-b-2 border-slate-800 pb-4 mb-6 flex justify-between items-end"><div><span class="text-xs font-bold text-blue-600 uppercase">${window.state.subject}</span><h2 class="text-xl font-bold uppercase mt-0.5">${window.state.topic}</h2></div><div class="w-56 text-xs space-y-1.5"><div class="flex border-b pb-0.5"><span class="w-16 font-semibold">Nama</span>:</div><div class="flex border-b pb-1"><span class="w-16 font-semibold">Kelas</span>:</div></div></div><div id="preview-content"></div></div></div></section>
+                    </main>
+                </div>
+            `;
+            renderPr                print-color-adjust: exact !important;
             }
             .no-print, header, aside, .modal-backdrop { 
                 display: none !important; 
