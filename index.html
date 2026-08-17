@@ -18,10 +18,23 @@
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 font-sans">
 
+    <!-- Di sinilah aplikasi akan muncul -->
     <div id="app"></div>
 
     <script>
-        // --- 1. PENGATURAN DATA AWAL ---
+        // Sistem Anti Layar Putih (Error Handler)
+        window.onerror = function(msg, url, lineNo) {
+            document.getElementById('app').innerHTML = `
+                <div class="p-10 text-center">
+                    <div class="text-6xl mb-4">⚠️</div>
+                    <h1 class="text-2xl font-bold text-red-600 mb-2">Terjadi Kesalahan Sistem</h1>
+                    <p class="text-slate-600 bg-red-50 p-4 rounded-xl font-mono text-sm inline-block">Error: ${msg} (Baris:${lineNo})</p>
+                    <p class="mt-4 text-sm">Kemungkinan ada kode yang terpotong saat Copy-Paste. Silakan ulangi proses salin kodenya secara utuh.</p>
+                </div>`;
+            return false;
+        };
+
+        // --- PENGATURAN DATA AWAL ---
         let savedKey = ''; 
         try { savedKey = localStorage.getItem('gemini_api_key') || ''; } catch(e) {}
 
@@ -34,6 +47,146 @@
             timeLimit: 15, 
             teacherWhatsApp: '628123456789', 
             apiKey: savedKey, 
+            rawShareUrl: '', 
+            showModal: false, 
+            showApiModal: false, 
+            studentQuiz: null, 
+            studentName: '', 
+            studentClass: '', 
+            studentAnswers: {}, 
+            timeRemaining: 0, 
+            timerInterval: null, 
+            scoreResult: null
+        };
+
+        // --- FUNGSI TOMBOL KUNING (TANPA AI) ---
+        function generateOffline() {
+            let lines = [];
+            for (let i = 1; i <= 25; i++) {
+                if (window.state.type === 'mc') { 
+                    lines.push(`Pertanyaan ${i} mengenai materi ${window.state.topic} pada pelajaran${window.state.subject}? | Pilihan A | Pilihan B | Pilihan C | Pilihan D | A`); 
+                } else if (window.state.type === 'tf') { 
+                    lines.push(`Pernyataan ${i} terkait materi${window.state.topic} bernilai benar atau salah.`); 
+                } else { 
+                    lines.push(`Jelaskan secara singkat mengenai poin ke-${i} dari materi${window.state.topic}?`); 
+                }
+            }
+            window.state.text = lines.join('\n');
+            renderApp();
+        }
+
+        // --- FUNGSI TOMBOL UNGU (DENGAN AI) ---
+        async function generateWithAI() {
+            if (!window.state.apiKey || window.state.apiKey.trim() === '') {
+                window.state.showApiModal = true; 
+                renderApp(); 
+                return;
+            }
+            
+            window.state.text = "⏳ Menghubungkan ke Gemini AI...\nMohon tunggu 5-10 detik..."; 
+            renderApp();
+            
+            const prompt = `Buatkan 25 soal ujian untuk pelajaran "${window.state.subject}" materi "${window.state.topic}". Tipe soal: ${window.state.type}. Jika tipe 'mc', format WAJIB per baris: Pertanyaan | Pilihan A | Pilihan B | Pilihan C | Pilihan D | Kunci(A/B/C/D). Tanpa nomor urut di awal baris. Hanya berikan teks soal.`;
+            const models = ['gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
+            let success = false; 
+            let errorMsg = "";
+
+            for (const model of models) {
+                if (success) break;
+                try {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${window.state.apiKey}`, {
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        window.state.text = data.candidates[0].content.parts[0].text.replace(/```/g, '').trim();
+                        success = true;
+                    } else {
+                        const err = await res.json(); 
+                        errorMsg = err.error?.message || "Model error";
+                    }
+                } catch (e) { 
+                    errorMsg = e.message; 
+                }
+            }
+            
+            if (!success) {
+                window.state.text = "❌ AI GAGAL TERHUBUNG.\nPenyebab: " + errorMsg + "\n\nSilakan gunakan tombol Kuning (Generate Tanpa AI) untuk sementara.";
+                alert("Gagal memuat AI. Silakan gunakan tombol Kuning.");
+            }
+            renderApp();
+        }
+
+        // --- FUNGSI PENDUKUNG ---
+        function saveApi() {
+            const inputKey = document.getElementById('modal-api-key').value.trim();
+            if (!inputKey) { alert("API Key kosong!"); return; }
+            window.state.apiKey = inputKey;
+            try { localStorage.setItem('gemini_api_key', inputKey); } catch(e){}
+            window.state.showApiModal = false; 
+            generateWithAI();
+        }
+
+        function setType(val) { window.state.type = val; renderApp(); }
+        function updateText(val) { window.state.text = val; renderPreviewOnly(); }
+        function triggerPrint() { window.print(); }
+
+        // --- FUNGSI LINK DAN UJIAN ---
+        async function generateLink() {
+            const payload = { 
+                t: window.state.type, 
+                s: window.state.subject, 
+                tp: window.state.topic, 
+                tm: Number(window.state.timeLimit) || 15, 
+                w: window.state.teacherWhatsApp.replace(/[^0-9]/g, ''), 
+                x: window.state.text 
+            };
+            const jsonStr = JSON.stringify(payload); 
+            let encodedStr = '';
+            try {
+                const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+                const buffer = await new Response(stream).arrayBuffer();
+                encodedStr = 'C' + btoa(String.fromCharCode.apply(null, new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            } catch (e) {
+                const utf8Bytes = new TextEncoder().encode(jsonStr);
+                encodedStr = 'U' + btoa(String.fromCharCode.apply(null, utf8Bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+            window.state.rawShareUrl = `${window.location.origin}${window.location.pathname}?q=${encodedStr}`; 
+            window.state.showModal = true; 
+            renderApp();
+        }
+
+        function copyLink() {
+            const i = document.createElement('textarea'); 
+            i.value = window.state.rawShareUrl; 
+            document.body.appendChild(i); 
+            i.select();
+            try { 
+                document.execCommand('copy'); 
+                document.getElementById('copy-feedback').innerText = '✅ Tersalin!'; 
+            } catch (err) {} 
+            document.body.removeChild(i);
+        }
+
+        function renderPreviewOnly() {
+            const container = document.getElementById('preview-content'); 
+            if (!container) return;
+            const labels = ['A', 'B', 'C', 'D']; 
+            let html = '';
+            
+            const lines = window.state.text.split('\n').filter(t => t.trim() !== '');
+            for (let idx = 0; idx < lines.length; idx++) {
+                const parts = lines[idx].split('|').map(x => x.trim());
+                if (window.state.type === 'mc' && parts.length >= 5) {
+                    html += `
+                    <div class="mb-4 text-sm page-break-inside-avoid">
+                        <div class="flex gap-2 font-medium mb-1">
+                            <span>${idx+1}.</span><span class="flex-1">${parts[0]}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-y-1.5 ml-5 text-xs">
+                            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-
             rawShareUrl: '', 
             showModal: false, 
             showApiModal: false, 
